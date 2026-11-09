@@ -29,6 +29,13 @@
       "when": 1794221604777,
       "tag": "0003_callback_request_paused_day_pauses",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794223734775,
+      "tag": "0004_settings_working_hours",
+      "breakpoints": true
     }
   ]
 }

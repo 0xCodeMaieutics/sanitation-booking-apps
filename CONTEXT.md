@@ -119,7 +119,7 @@ _Avoid_: Estimated cost, final price, amount charged, actual price
 ### Scheduling
 
 **Working Hours**:
-The hourly start times every Company offers, in Tbilisi time: 09:00 to 18:00 on its Working Days. Companies cannot change them.
+The hourly start times a Company offers on its Working Days, in Tbilisi time, from a first to a last start time chosen by its Admins; 09:00 to 18:00 by default. 00:00 to 23:00 means the Company works around the clock. They are the same on every Working Day.
 _Avoid_: Schedule, shifts, opening hours
 
 **Working Days**:

@@ -8,9 +8,6 @@ import {
   weekdayOf,
 } from "./time"
 
-/** Working Hours: the first and last hourly start time of a Working Day. */
-export const FIRST_START_HOUR = 9
-export const LAST_START_HOUR = 18
 /** The Booking Window runs from today to this many days ahead. */
 export const BOOKING_WINDOW_DAYS = 14
 
@@ -26,6 +23,9 @@ export type Calendar = {
   now: Date
   minNoticeHours: number
   workingDays: readonly IsoWeekday[]
+  /** Working Hours: the first and last hourly start time of a Working Day, 0–23. */
+  firstStartHour: number
+  lastStartHour: number
   /** Booked Bookings and Time Off. Completed and Cancelled Bookings have already stopped occupying time. */
   occupied: readonly Occupied[]
   /** Days holding a Pending Callback Request's desired start time. */
@@ -72,7 +72,7 @@ export function availableStartTimes(
   if (!isInBookingWindow(date, calendar.now) || dayStatus(calendar, date) !== "open") return []
   const earliest = addHours(calendar.now, calendar.minNoticeHours)
   const times: Date[] = []
-  for (let hour = FIRST_START_HOUR; hour <= LAST_START_HOUR; hour++) {
+  for (let hour = calendar.firstStartHour; hour <= calendar.lastStartHour; hour++) {
     const startsAt = localInstant(date, hour)
     if (startsAt <= calendar.now || startsAt < earliest) continue
     const endsAt = addHours(startsAt, durationHours ?? 1)

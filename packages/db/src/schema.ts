@@ -65,9 +65,18 @@ export const settings = pgTable(
       .array()
       .notNull()
       .default(sql`'{1,2,3,4,5,6,7}'`),
+    /** Working Hours: the first and last hourly start time, Tbilisi time. 0 and 23 means around the clock. */
+    firstStartHour: smallint().notNull().default(9),
+    lastStartHour: smallint().notNull().default(18),
     ...timestamps,
   },
-  (t) => [check("settings_min_notice", sql`${t.minNoticeHours} between 0 and 72`)]
+  (t) => [
+    check("settings_min_notice", sql`${t.minNoticeHours} between 0 and 72`),
+    check(
+      "settings_working_hours",
+      sql`0 <= ${t.firstStartHour} and ${t.firstStartHour} <= ${t.lastStartHour} and ${t.lastStartHour} <= 23`
+    ),
+  ]
 )
 
 export const service = pgTable(

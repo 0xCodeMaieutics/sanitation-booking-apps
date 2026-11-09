@@ -72,7 +72,8 @@ export async function loadCalendar(
   const start = localInstant(input.from)
   const end = localInstant(addDays(input.to, 1))
   const settings = await getSettings(db, input)
-  const occupied = await loadOccupied(db, input.companyId, start, end)
+  // A job starting late on the last day can run into the next one.
+  const occupied = await loadOccupied(db, input.companyId, start, addHours(end, MAX_DURATION_HOURS))
   const pending = await db
     .select({ desiredStartsAt: callbackRequest.desiredStartsAt, pausedDate: callbackRequest.pausedDate })
     .from(callbackRequest)

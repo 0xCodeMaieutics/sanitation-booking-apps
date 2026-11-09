@@ -13,6 +13,8 @@ function calendar(overrides: Partial<Calendar> = {}): Calendar {
     now: NOW,
     minNoticeHours: 0,
     workingDays: [1, 2, 3, 4, 5, 6, 7],
+    firstStartHour: 9,
+    lastStartHour: 18,
     occupied: [],
     pausedDates: new Set(),
     ...overrides,
@@ -39,6 +41,25 @@ describe("availableStartTimes", () => {
       "17:00",
       "18:00",
     ])
+  })
+
+  it("follows the Company's Working Hours", () => {
+    const times = availableStartTimes(calendar({ firstStartHour: 7, lastStartHour: 10 }), TOMORROW, 1)
+    expect(hours(times)).toEqual(["07:00", "08:00", "09:00", "10:00"])
+  })
+
+  it("offers every hour of the day when working around the clock", () => {
+    const times = availableStartTimes(calendar({ firstStartHour: 0, lastStartHour: 23 }), TOMORROW, 1)
+    expect(times).toHaveLength(24)
+    expect(hours(times)[0]).toBe("00:00")
+    expect(hours(times)[23]).toBe("23:00")
+  })
+
+  it("keeps a late job's Duration clear into the next day", () => {
+    const allDay = { firstStartHour: 0, lastStartHour: 23 }
+    const times = availableStartTimes(calendar({ ...allDay, occupied: [busy(TOMORROW, 0, 1)] }), TODAY, 3)
+    expect(hours(times)).not.toContain("22:00")
+    expect(hours(times)).toContain("21:00")
   })
 
   it("lets a job run past the last start time", () => {

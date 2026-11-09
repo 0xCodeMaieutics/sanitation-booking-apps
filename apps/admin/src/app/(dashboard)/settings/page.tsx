@@ -16,10 +16,10 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="პარამეტრები" description="სამუშაო საათები: 09:00–18:00 (დაწყების დრო)." />
+      <PageHeader title="პარამეტრები" />
       <div className="flex flex-col gap-5">
         <BookingLink url={me.bookingLink} />
-        <SettingsForm minNoticeHours={settings.minNoticeHours} workingDays={settings.workingDays} />
+        <SettingsForm {...settings} />
         <AdminPhones phones={phones} currentId={me.adminPhoneId} />
       </div>
       <SignOut />
