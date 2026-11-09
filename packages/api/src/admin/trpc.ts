@@ -14,7 +14,6 @@ export type SessionCookie = {
 export type AdminContext = {
   db: Db
   messaging: Messaging
-  adminPhone: string
   session: SessionCookie
   ipAddress: string | null
   userAgent: string
@@ -32,10 +31,10 @@ export const publicProcedure = t.procedure.use(async ({ next }) => {
   return result
 })
 
-/** Requires a signed-in Admin session on this device. */
+/** Requires a signed-in Admin session on this device; everything it does is scoped to that Admin's Company. */
 export const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
   const token = ctx.session.get()
-  const session = token === null ? null : await findAdminSession(ctx.db, { token, now: ctx.now() })
-  if (session === null) throw new DomainError("UNAUTHORIZED")
-  return next()
+  const admin = token === null ? null : await findAdminSession(ctx.db, { token, now: ctx.now() })
+  if (admin === null) throw new DomainError("UNAUTHORIZED")
+  return next({ ctx: { admin, companyId: admin.companyId } })
 })

@@ -17,12 +17,18 @@ export type Db = ReturnType<typeof createDb>
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0]
 export type DbOrTx = Db | Tx
 
-const globalForDb = globalThis as unknown as { sanitationDb?: Db }
+const globalForDb = globalThis as unknown as { sanitationDb?: { db: Db; schema: typeof schema } }
 
-/** A process-wide Db, reused across hot reloads in development. */
+/**
+ * A process-wide Db, reused across hot reloads in development. A Db made before the schema
+ * changed would keep its stale column-name cache, so a reloaded schema gets a new one.
+ */
 export function getDb(): Db {
-  globalForDb.sanitationDb ??= createDb()
-  return globalForDb.sanitationDb
+  const cached = globalForDb.sanitationDb
+  if (cached?.schema === schema) return cached.db
+  const db = createDb()
+  globalForDb.sanitationDb = { db, schema }
+  return db
 }
 
 const UNIQUE_VIOLATION = "23505"

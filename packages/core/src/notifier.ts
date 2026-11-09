@@ -6,11 +6,11 @@ export type Notifier = {
   sendCode(phone: string, body: string): Promise<void>
   /** A Client Message. A failure is logged: the change it reports has already happened. */
   client(phone: string, body: string): Promise<void>
-  /** An Admin Alert. A failure is logged, like a Client Message. */
-  admin(body: string): Promise<void>
+  /** An Admin Alert to each of `phones`. A failure is logged, like a Client Message. */
+  admin(phones: readonly string[], body: string): Promise<void>
 }
 
-export function createNotifier(sms: SmsSender, adminPhone: string): Notifier {
+export function createNotifier(sms: SmsSender): Notifier {
   const quietly = async (to: string, body: string) => {
     try {
       await sms.send(to, body)
@@ -28,6 +28,8 @@ export function createNotifier(sms: SmsSender, adminPhone: string): Notifier {
       }
     },
     client: quietly,
-    admin: (body) => quietly(adminPhone, body),
+    admin: async (phones, body) => {
+      await Promise.all(phones.map((phone) => quietly(phone, body)))
+    },
   }
 }

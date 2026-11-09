@@ -1,36 +1,81 @@
 import { createHash, randomBytes } from "node:crypto"
 
-import { createDb, lt, schema } from "./index"
+import { createDb, eq, schema } from "./index"
 
 const db = createDb()
 
-const existing = await db.select({ id: schema.service.id }).from(schema.service).limit(1)
-if (existing.length === 0) {
-  await db.insert(schema.service).values([
-    {
-      name: "სეპტიკის გაწმენდა",
-      description: "სეპტიკური ავზის ამოტუმბვა და გაწმენდა",
-      durationHours: 2,
-      priceGel: 200,
-      sortOrder: 1,
-    },
-    {
-      name: "კანალიზაციის გაწმენდა",
-      description: "ჩახერგილი მილის გახსნა და გარეცხვა",
-      durationHours: 1,
-      priceGel: 80,
-      sortOrder: 2,
-    },
-    {
-      name: "მილების ვიდეოდიაგნოსტიკა",
-      description: "კამერით შემოწმება და დასკვნა",
-      durationHours: 1,
-      priceGel: 120,
-      sortOrder: 3,
-    },
-  ])
+type SeedCompany = {
+  slug: string
+  name: string
+  adminPhones: { phone: string; alerts: boolean }[]
+  services: { name: string; description: string; durationHours: number; priceGel: number }[]
 }
-await db.insert(schema.settings).values({ id: 1 }).onConflictDoNothing()
+
+/** Two Companies, so it is easy to see that neither one's data leaks into the other's. */
+const companies: SeedCompany[] = [
+  {
+    slug: "aleko-tbilisi",
+    name: "ალეკო",
+    adminPhones: [
+      { phone: "+995555123456", alerts: true },
+      { phone: "+995555123457", alerts: false },
+    ],
+    services: [
+      {
+        name: "სეპტიკის გაწმენდა",
+        description: "სეპტიკური ავზის ამოტუმბვა და გაწმენდა",
+        durationHours: 2,
+        priceGel: 200,
+      },
+      {
+        name: "კანალიზაციის გაწმენდა",
+        description: "ჩახერგილი მილის გახსნა და გარეცხვა",
+        durationHours: 1,
+        priceGel: 80,
+      },
+      {
+        name: "მილების ვიდეოდიაგნოსტიკა",
+        description: "კამერით შემოწმება და დასკვნა",
+        durationHours: 1,
+        priceGel: 120,
+      },
+    ],
+  },
+  {
+    slug: "supta-qalaqi",
+    name: "სუფთა ქალაქი",
+    adminPhones: [{ phone: "+995555654321", alerts: true }],
+    services: [
+      {
+        name: "საკანალიზაციო ჭის გაწმენდა",
+        description: "ჭის ამოტუმბვა და გარეცხვა",
+        durationHours: 3,
+        priceGel: 250,
+      },
+      { name: "მილის გახსნა", description: "", durationHours: 1, priceGel: 70 },
+    ],
+  },
+]
+
+/** Creates the Company unless its slug exists; returns its id and whether it is new. */
+async function seedCompany(c: SeedCompany): Promise<{ id: string; created: boolean }> {
+  const [existing] = await db.select().from(schema.company).where(eq(schema.company.slug, c.slug))
+  if (existing !== undefined) return { id: existing.id, created: false }
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(schema.company).values({ slug: c.slug, name: c.name }).returning()
+    if (row === undefined) throw new Error(`Failed to seed ${c.slug}`)
+    await tx.insert(schema.companySlug).values({ slug: c.slug, companyId: row.id })
+    await tx.insert(schema.adminPhone).values(c.adminPhones.map((p) => ({ ...p, companyId: row.id })))
+    await tx.insert(schema.settings).values({ companyId: row.id })
+    await tx
+      .insert(schema.service)
+      .values(c.services.map((svc, i) => ({ ...svc, sortOrder: i + 1, companyId: row.id })))
+    return { id: row.id, created: true }
+  })
+}
+
+const [aleko] = await Promise.all(companies.map(seedCompany))
+if (aleko === undefined) throw new Error("No seed companies")
 
 /** `hour` o'clock Tbilisi time, `daysAgo` days before today. Tbilisi is UTC+4 all year. */
 function tbilisi(daysAgo: number, hour: number): Date {
@@ -43,13 +88,8 @@ function tbilisi(daysAgo: number, hour: number): Date {
 const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * 3_600_000)
 const tokenHash = () => createHash("sha256").update(randomBytes(16)).digest("hex")
 
-const past = await db
-  .select({ id: schema.booking.id })
-  .from(schema.booking)
-  .where(lt(schema.booking.startsAt, tbilisi(0, 0)))
-  .limit(1)
-if (past.length === 0) {
-  const services = await db.select().from(schema.service)
+if (aleko.created) {
+  const services = await db.select().from(schema.service).where(eq(schema.service.companyId, aleko.id))
   const byName = (name: string) => {
     const svc = services.find((s) => s.name === name)
     if (svc === undefined) throw new Error(`Seed service missing: ${name}`)
@@ -210,6 +250,7 @@ if (past.length === 0) {
       const startsAt = tbilisi(b.daysAgo, b.hour)
       const durationHours = "custom" in b.service ? b.service.durationHours : b.service.durationHours
       return {
+        companyId: aleko.id,
         serviceId: "custom" in b.service ? null : b.service.id,
         customService: "custom" in b.service ? b.service.custom : null,
         startsAt,

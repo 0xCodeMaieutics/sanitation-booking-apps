@@ -9,9 +9,9 @@ const { booking, callbackRequest, service, timeOff } = schema
 /** Longest a Booking can be, so we know how far back to look for ones still running. */
 const MAX_DURATION_HOURS = 12
 
-/** Serialises every change that takes time, so two Clients cannot take the same hour. */
-export async function lockCalendar(tx: DbOrTx): Promise<void> {
-  await tx.execute(sql`select pg_advisory_xact_lock(731400)`)
+/** Serialises every change that takes a Company's time, so two Clients cannot take the same hour. */
+export async function lockCalendar(tx: DbOrTx, companyId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(731400, hashtext(${companyId}))`)
 }
 
 export function bookingLabel(b: { startsAt: Date; durationHours: number; title: string }): string {
@@ -19,8 +19,8 @@ export function bookingLabel(b: { startsAt: Date; durationHours: number; title: 
   return `${b.title}, ${formatHour(from)}–${formatHour((from + b.durationHours) % 24)}`
 }
 
-/** Booked Bookings and Time Off overlapping `[from, to)`. */
-export async function loadOccupied(db: DbOrTx, from: Date, to: Date): Promise<Occupied[]> {
+/** A Company's Booked Bookings and Time Off overlapping `[from, to)`. */
+export async function loadOccupied(db: DbOrTx, companyId: string, from: Date, to: Date): Promise<Occupied[]> {
   const bookings = await db
     .select({
       startsAt: booking.startsAt,
@@ -33,6 +33,7 @@ export async function loadOccupied(db: DbOrTx, from: Date, to: Date): Promise<Oc
     .leftJoin(service, eq(service.id, booking.serviceId))
     .where(
       and(
+        eq(booking.companyId, companyId),
         eq(booking.status, "booked"),
         gte(booking.startsAt, addHours(from, -MAX_DURATION_HOURS)),
         lt(booking.startsAt, to)
@@ -41,7 +42,7 @@ export async function loadOccupied(db: DbOrTx, from: Date, to: Date): Promise<Oc
   const offs = await db
     .select()
     .from(timeOff)
-    .where(and(lt(timeOff.startsAt, to), gt(timeOff.endsAt, from)))
+    .where(and(eq(timeOff.companyId, companyId), lt(timeOff.startsAt, to), gt(timeOff.endsAt, from)))
 
   return [
     ...bookings.map((b) => ({
@@ -63,20 +64,21 @@ export async function loadOccupied(db: DbOrTx, from: Date, to: Date): Promise<Oc
   ].filter((o) => o.endsAt > from)
 }
 
-/** The Calendar from `from` to `to` (inclusive local dates). */
+/** A Company's Calendar from `from` to `to` (inclusive local dates). */
 export async function loadCalendar(
   db: DbOrTx,
-  input: { from: LocalDate; to: LocalDate; now: Date }
+  input: { companyId: string; from: LocalDate; to: LocalDate; now: Date }
 ): Promise<Calendar> {
   const start = localInstant(input.from)
   const end = localInstant(addDays(input.to, 1))
-  const settings = await getSettings(db)
-  const occupied = await loadOccupied(db, start, end)
+  const settings = await getSettings(db, input)
+  const occupied = await loadOccupied(db, input.companyId, start, end)
   const pending = await db
     .select({ desiredStartsAt: callbackRequest.desiredStartsAt })
     .from(callbackRequest)
     .where(
       and(
+        eq(callbackRequest.companyId, input.companyId),
         eq(callbackRequest.status, "pending"),
         isNotNull(callbackRequest.desiredStartsAt),
         gte(callbackRequest.desiredStartsAt, start),

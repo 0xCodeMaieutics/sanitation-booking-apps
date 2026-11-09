@@ -33,11 +33,10 @@ function clientIp(headers: Headers): string | null {
 }
 
 export async function createAdminContext(headers: Headers): Promise<AdminContext> {
-  notify ??= createNotifier(createSmsSender(env.SMS_PROVIDER ?? ""), env.ADMIN_PHONE)
+  notify ??= createNotifier(createSmsSender(env.SMS_PROVIDER ?? ""))
   return {
     db: getDb(),
     messaging: { notify, appUrl: env.APP_URL },
-    adminPhone: env.ADMIN_PHONE,
     session: await sessionCookie(),
     ipAddress: clientIp(headers),
     userAgent: headers.get("user-agent")?.slice(0, 300) ?? "",

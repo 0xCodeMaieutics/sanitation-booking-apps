@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -22,11 +23,41 @@ const timestamps = {
     .$onUpdate(() => new Date()),
 }
 
-/** The Admin's settings. A single row; no row means the defaults. */
+export const company = pgTable("company", {
+  id: uuid().primaryKey().defaultRandom(),
+  /** The current slug of its Booking Link; also listed in `company_slug`. */
+  slug: text().notNull().unique(),
+  name: text().notNull(),
+  suspendedAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+})
+
+const companyId = () =>
+  uuid()
+    .notNull()
+    .references(() => company.id)
+
+/** Every slug a Company has had, current or former, so none is ever given to another Company. */
+export const companySlug = pgTable("company_slug", {
+  slug: text().primaryKey(),
+  companyId: companyId(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+})
+
+export const adminPhone = pgTable("admin_phone", {
+  id: uuid().primaryKey().defaultRandom(),
+  companyId: companyId(),
+  /** A number can be an Admin Phone of only one Company. */
+  phone: text().notNull().unique(),
+  alerts: boolean().notNull().default(true),
+  ...timestamps,
+})
+
+/** A Company's settings. No row means the defaults. */
 export const settings = pgTable(
   "settings",
   {
-    id: smallint().primaryKey().default(1),
+    companyId: companyId().primaryKey(),
     minNoticeHours: smallint().notNull().default(2),
     /** ISO weekdays, 1 = Monday … 7 = Sunday. */
     workingDays: smallint()
@@ -35,16 +66,14 @@ export const settings = pgTable(
       .default(sql`'{1,2,3,4,5,6,7}'`),
     ...timestamps,
   },
-  (t) => [
-    check("settings_single_row", sql`${t.id} = 1`),
-    check("settings_min_notice", sql`${t.minNoticeHours} between 0 and 72`),
-  ]
+  (t) => [check("settings_min_notice", sql`${t.minNoticeHours} between 0 and 72`)]
 )
 
 export const service = pgTable(
   "service",
   {
     id: uuid().primaryKey().defaultRandom(),
+    companyId: companyId(),
     name: text().notNull(),
     description: text().notNull().default(""),
     durationHours: smallint().notNull(),
@@ -54,6 +83,7 @@ export const service = pgTable(
     ...timestamps,
   },
   (t) => [
+    index().on(t.companyId),
     check("service_duration", sql`${t.durationHours} between 1 and 12`),
     check("service_price", sql`${t.priceGel} >= 0`),
   ]
@@ -68,6 +98,7 @@ export const callbackRequest = pgTable(
   "callback_request",
   {
     id: uuid().primaryKey().defaultRandom(),
+    companyId: companyId(),
     phone: text().notNull(),
     clientName: text().notNull().default(""),
     /** The job in the Client's own words: a Custom Service, or "other" on a Paused Day. */
@@ -81,9 +112,9 @@ export const callbackRequest = pgTable(
     ...timestamps,
   },
   (t) => [
-    index().on(t.status, t.desiredStartsAt),
+    index().on(t.companyId, t.status, t.desiredStartsAt),
     uniqueIndex("callback_request_one_pending_pause_per_phone")
-      .on(t.phone)
+      .on(t.companyId, t.phone)
       .where(sql`${t.status} = 'pending' and ${t.desiredStartsAt} is not null`),
   ]
 )
@@ -111,6 +142,7 @@ export const booking = pgTable(
   "booking",
   {
     id: uuid().primaryKey().defaultRandom(),
+    companyId: companyId(),
     /** Null for a Custom Service, which is described in `customService` instead. */
     serviceId: uuid().references(() => service.id),
     customService: text(),
@@ -135,7 +167,7 @@ export const booking = pgTable(
     ...timestamps,
   },
   (t) => [
-    index().on(t.startsAt),
+    index().on(t.companyId, t.startsAt),
     check("booking_service_or_custom", sql`(${t.serviceId} is null) <> (${t.customService} is null)`),
     check("booking_duration", sql`${t.durationHours} between 1 and 12`),
     check("booking_price", sql`${t.priceGel} is null or ${t.priceGel} >= 0`),
@@ -148,12 +180,13 @@ export const timeOff = pgTable(
   "time_off",
   {
     id: uuid().primaryKey().defaultRandom(),
+    companyId: companyId(),
     startsAt: timestamp({ withTimezone: true }).notNull(),
     endsAt: timestamp({ withTimezone: true }).notNull(),
     note: text().notNull().default(""),
     ...timestamps,
   },
-  (t) => [index().on(t.startsAt), check("time_off_range", sql`${t.endsAt} > ${t.startsAt}`)]
+  (t) => [index().on(t.companyId, t.startsAt), check("time_off_range", sql`${t.endsAt} > ${t.startsAt}`)]
 )
 
 export const verificationPurpose = pgEnum("verification_purpose", ["client", "admin_sign_in"])
@@ -178,6 +211,10 @@ export const phoneVerification = pgTable(
 
 export const adminSession = pgTable("admin_session", {
   id: uuid().primaryKey().defaultRandom(),
+  /** Removing the Admin Phone ends every session signed in with it. */
+  adminPhoneId: uuid()
+    .notNull()
+    .references(() => adminPhone.id, { onDelete: "cascade" }),
   tokenHash: text().notNull().unique(),
   userAgent: text().notNull().default(""),
   expiresAt: timestamp({ withTimezone: true }).notNull(),

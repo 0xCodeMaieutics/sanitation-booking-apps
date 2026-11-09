@@ -8,6 +8,7 @@
     "./phone": "./src/phone.ts"
   },
   "scripts": {
+    "company": "tsx --env-file-if-exists=../../.env scripts/company.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^24",
+    "tsx": "^4.23.15",
     "vitest": "^4.1.6"
   }
 }

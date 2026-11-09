@@ -12,6 +12,13 @@ export type DomainErrorCode =
   | "OVERLAP"
   | "INVALID_STATE"
   | "CANCEL_TOO_LATE"
+  | "COMPANY_SUSPENDED"
+  | "PHONE_TAKEN"
+  | "LAST_ADMIN_PHONE"
+  | "LAST_ALERT_PHONE"
+  | "INVALID_SLUG"
+  | "SLUG_TAKEN"
+  | "INVALID_NAME"
 
 export type Conflict = { kind: "booking" | "timeOff"; startsAt: Date; endsAt: Date; label: string }
 

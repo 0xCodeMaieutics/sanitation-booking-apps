@@ -3,14 +3,18 @@ import { formatDateTime } from "./time"
 
 type BookingSummary = { title: string; startsAt: Date }
 
-/** Georgian SMS texts. Georgian is sent as UCS-2, so each segment holds 70 characters. */
+/**
+ * Georgian SMS texts. Georgian is sent as UCS-2, so each segment holds 70 characters.
+ * Every SMS comes from Cleanly's sender name, so all but the code say which Company sent it.
+ */
 export const clientMessages = {
   verificationCode: (code: string) => `თქვენი კოდი: ${code}`,
-  confirmation: (b: BookingSummary, manageUrl: string) =>
-    `ჯავშანი დადასტურდა: ${b.title}, ${formatDateTime(b.startsAt)}. ნახვა/გაუქმება: ${manageUrl}`,
-  cancelledByAdmin: (b: BookingSummary) =>
-    `თქვენი ჯავშანი (${b.title}, ${formatDateTime(b.startsAt)}) გაუქმდა. დეტალებისთვის დაგვიკავშირდით.`,
-  requestDeclined: () => "სამწუხაროდ, თქვენს მოთხოვნას ამჯერად ვერ შევასრულებთ.",
+  confirmation: (companyName: string, b: BookingSummary, manageUrl: string) =>
+    `${companyName}: ჯავშანი დადასტურდა: ${b.title}, ${formatDateTime(b.startsAt)}. ნახვა/გაუქმება: ${manageUrl}`,
+  cancelledByAdmin: (companyName: string, b: BookingSummary) =>
+    `${companyName}: თქვენი ჯავშანი (${b.title}, ${formatDateTime(b.startsAt)}) გაუქმდა. დეტალებისთვის დაგვიკავშირდით.`,
+  requestDeclined: (companyName: string) =>
+    `${companyName}: სამწუხაროდ, თქვენს მოთხოვნას ამჯერად ვერ შევასრულებთ.`,
 }
 
 export const adminAlerts = {

@@ -1,4 +1,5 @@
 import {
+  DomainError,
   bookingWindowDates,
   cancelBookingByClient,
   createClientBooking,
@@ -15,15 +16,22 @@ import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import { zAddress, zCode, zName, zNote, zPhone } from "../shared"
-import { createCallerFactory, publicProcedure, router } from "./trpc"
+import { companyProcedure, createCallerFactory, publicProcedure, router } from "./trpc"
 
 const zVerified = { phone: zPhone, verificationId: z.uuid(), code: zCode }
 
 export const appRouter = router({
   // Queries: read by server components through `createAppCaller`.
 
-  services: publicProcedure.query(async ({ ctx }) => {
-    const services = await listServices(ctx.db, { includeArchived: false })
+  /** The Company behind a Booking Link. `slug` differs from the one asked for when that was a former slug. */
+  company: companyProcedure.query(({ ctx }) => ({
+    slug: ctx.company.slug,
+    name: ctx.company.name,
+    suspended: ctx.company.suspendedAt !== null,
+  })),
+
+  services: companyProcedure.query(async ({ ctx }) => {
+    const services = await listServices(ctx.db, { companyId: ctx.company.id, includeArchived: false })
     return services.map(({ id, name, description, durationHours, priceGel }) => ({
       id,
       name,
@@ -34,18 +42,24 @@ export const appRouter = router({
   }),
 
   /** The Booking Window for a Standard Service, or for a Custom Service request when `serviceId` is null. */
-  availability: publicProcedure
+  availability: companyProcedure
     .input(z.object({ serviceId: z.uuid().nullable() }))
     .query(async ({ ctx, input }) => {
+      const companyId = ctx.company.id
       let durationHours: number | null = null
       if (input.serviceId !== null) {
-        const svc = await getService(ctx.db, input.serviceId)
+        const svc = await getService(ctx.db, { companyId, serviceId: input.serviceId })
         if (svc === null || svc.archivedAt !== null) throw new TRPCError({ code: "NOT_FOUND" })
         durationHours = svc.durationHours
       }
       const now = ctx.now()
       const dates = bookingWindowDates(now)
-      const calendar = await loadCalendar(ctx.db, { from: dates[0] ?? "", to: dates.at(-1) ?? "", now })
+      const calendar = await loadCalendar(ctx.db, {
+        companyId,
+        from: dates[0] ?? "",
+        to: dates.at(-1) ?? "",
+        now,
+      })
       return windowAvailability(calendar, durationHours)
     }),
 
@@ -53,6 +67,8 @@ export const appRouter = router({
     const b = await getBookingByToken(ctx.db, input.token)
     if (b === null) throw new TRPCError({ code: "NOT_FOUND" })
     return {
+      companyName: b.companyName,
+      companySlug: b.companySlug,
       title: b.title,
       startsAt: b.startsAt,
       endsAt: b.endsAt,
@@ -67,7 +83,8 @@ export const appRouter = router({
 
   // Mutations.
 
-  sendCode: publicProcedure.input(z.object({ phone: zPhone })).mutation(async ({ ctx, input }) => {
+  sendCode: companyProcedure.input(z.object({ phone: zPhone })).mutation(async ({ ctx, input }) => {
+    if (ctx.company.suspendedAt !== null) throw new DomainError("COMPANY_SUSPENDED")
     const { verificationId } = await sendClientCode(ctx.db, ctx.messaging.notify, {
       phone: input.phone,
       ipAddress: ctx.ipAddress,
@@ -76,7 +93,7 @@ export const appRouter = router({
     return { verificationId }
   }),
 
-  book: publicProcedure
+  book: companyProcedure
     .input(
       z.object({
         ...zVerified,
@@ -87,9 +104,11 @@ export const appRouter = router({
         note: zNote,
       })
     )
-    .mutation(({ ctx, input }) => createClientBooking(ctx.db, ctx.messaging, { ...input, now: ctx.now() })),
+    .mutation(({ ctx, input }) =>
+      createClientBooking(ctx.db, ctx.messaging, { ...input, companyId: ctx.company.id, now: ctx.now() })
+    ),
 
-  requestCustom: publicProcedure
+  requestCustom: companyProcedure
     .input(
       z.object({
         ...zVerified,
@@ -100,9 +119,11 @@ export const appRouter = router({
         note: zNote,
       })
     )
-    .mutation(({ ctx, input }) => createCustomRequest(ctx.db, ctx.messaging, { ...input, now: ctx.now() })),
+    .mutation(({ ctx, input }) =>
+      createCustomRequest(ctx.db, ctx.messaging, { ...input, companyId: ctx.company.id, now: ctx.now() })
+    ),
 
-  requestCallback: publicProcedure
+  requestCallback: companyProcedure
     .input(
       z.object({
         ...zVerified,
@@ -113,7 +134,7 @@ export const appRouter = router({
       })
     )
     .mutation(({ ctx, input }) =>
-      createPausedDayRequest(ctx.db, ctx.messaging, { ...input, now: ctx.now() })
+      createPausedDayRequest(ctx.db, ctx.messaging, { ...input, companyId: ctx.company.id, now: ctx.now() })
     ),
 
   cancel: publicProcedure.input(z.object({ token: z.string().max(64) })).mutation(async ({ ctx, input }) => {

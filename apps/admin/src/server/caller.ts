@@ -14,7 +14,7 @@ export const serverCaller = cache(async () => createAdminCaller(await createAdmi
 export const requireAdmin = cache(async () => {
   const caller = await serverCaller()
   try {
-    await caller.auth.check()
+    await caller.auth.me()
   } catch (error) {
     if (error instanceof TRPCError && error.code === "UNAUTHORIZED") redirect("/sign-in")
     throw error

@@ -5,14 +5,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": [
-        "DATABASE_URL",
-        "SKIP_ENV_VALIDATION",
-        "SMS_PROVIDER",
-        "SENDER_GE_API_KEY",
-        "ADMIN_PHONE",
-        "APP_URL"
-      ],
+      "env": ["DATABASE_URL", "SKIP_ENV_VALIDATION", "SMS_PROVIDER", "SENDER_GE_API_KEY", "APP_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"]
     },

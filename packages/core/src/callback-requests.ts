@@ -12,9 +12,11 @@ import {
   sql,
 } from "@sanitation/db"
 
+import { alertAdmins } from "./admin-phones"
 import { isAvailableStartTime } from "./availability"
 import type { Messaging } from "./bookings"
 import { loadCalendar, lockCalendar } from "./calendar"
+import { getActiveCompany, getCompany } from "./companies"
 import { DomainError } from "./errors"
 import { adminAlerts, clientMessages } from "./messages"
 import { normalizePhone } from "./phone"
@@ -30,6 +32,7 @@ export async function createCustomRequest(
   db: Db,
   m: Messaging,
   input: Verified & {
+    companyId: string
     description: string
     address: string
     desiredStartsAt: Date
@@ -43,9 +46,15 @@ export async function createCustomRequest(
   await checkVerificationCode(db, { ...input, phone, purpose: "client" })
 
   const callbackRequestId = await db.transaction(async (tx) => {
-    await lockCalendar(tx)
+    await lockCalendar(tx, input.companyId)
+    await getActiveCompany(tx, input.companyId)
     const date = toLocalDate(input.desiredStartsAt)
-    const calendar = await loadCalendar(tx, { from: date, to: date, now: input.now })
+    const calendar = await loadCalendar(tx, {
+      companyId: input.companyId,
+      from: date,
+      to: date,
+      now: input.now,
+    })
     if (calendar.pausedDates.has(date)) throw new DomainError("DAY_PAUSED")
     if (!isAvailableStartTime(calendar, input.desiredStartsAt, null))
       throw new DomainError("START_UNAVAILABLE")
@@ -55,6 +64,7 @@ export async function createCustomRequest(
       const [row] = await tx
         .insert(callbackRequest)
         .values({
+          companyId: input.companyId,
           phone,
           clientName: input.clientName,
           description: input.description,
@@ -73,7 +83,10 @@ export async function createCustomRequest(
     }
   })
 
-  await m.notify.admin(adminAlerts.customRequest({ desiredStartsAt: input.desiredStartsAt, phone }))
+  await alertAdmins(db, m.notify, {
+    companyId: input.companyId,
+    body: adminAlerts.customRequest({ desiredStartsAt: input.desiredStartsAt, phone }),
+  })
   return { callbackRequestId }
 }
 
@@ -82,6 +95,7 @@ export async function createPausedDayRequest(
   db: Db,
   m: Messaging,
   input: Verified & {
+    companyId: string
     serviceIds: string[]
     description: string
     clientName: string
@@ -94,10 +108,17 @@ export async function createPausedDayRequest(
   await checkVerificationCode(db, { ...input, phone, purpose: "client" })
 
   const callbackRequestId = await db.transaction(async (tx) => {
+    await getActiveCompany(tx, input.companyId)
     await consumeVerification(tx, { ...input, phone, purpose: "client" })
     const [row] = await tx
       .insert(callbackRequest)
-      .values({ phone, clientName: input.clientName, description: input.description, note: input.note })
+      .values({
+        companyId: input.companyId,
+        phone,
+        clientName: input.clientName,
+        description: input.description,
+        note: input.note,
+      })
       .returning({ id: callbackRequest.id })
     if (row === undefined) throw new Error("Failed to create callback request")
     const serviceIds = [...new Set(input.serviceIds)]
@@ -105,7 +126,13 @@ export async function createPausedDayRequest(
       const known = await tx
         .select({ id: service.id })
         .from(service)
-        .where(and(inArray(service.id, serviceIds), isNull(service.archivedAt)))
+        .where(
+          and(
+            inArray(service.id, serviceIds),
+            eq(service.companyId, input.companyId),
+            isNull(service.archivedAt)
+          )
+        )
       if (known.length > 0) {
         await tx
           .insert(callbackRequestService)
@@ -115,23 +142,33 @@ export async function createPausedDayRequest(
     return row.id
   })
 
-  await m.notify.admin(adminAlerts.callbackRequest({ phone }))
+  await alertAdmins(db, m.notify, {
+    companyId: input.companyId,
+    body: adminAlerts.callbackRequest({ phone }),
+  })
   return { callbackRequestId }
 }
 
 export async function declineCallbackRequest(
   db: Db,
   m: Messaging,
-  input: { callbackRequestId: string; now: Date }
+  input: { companyId: string; callbackRequestId: string; now: Date }
 ): Promise<void> {
   const rows = await db
     .update(callbackRequest)
     .set({ status: "declined", decidedAt: input.now })
-    .where(and(eq(callbackRequest.id, input.callbackRequestId), eq(callbackRequest.status, "pending")))
+    .where(
+      and(
+        eq(callbackRequest.id, input.callbackRequestId),
+        eq(callbackRequest.companyId, input.companyId),
+        eq(callbackRequest.status, "pending")
+      )
+    )
     .returning({ phone: callbackRequest.phone })
   const declined = rows[0]
   if (declined === undefined) throw new DomainError("INVALID_STATE")
-  await m.notify.client(declined.phone, clientMessages.requestDeclined())
+  const c = await getCompany(db, input.companyId)
+  await m.notify.client(declined.phone, clientMessages.requestDeclined(c.name))
 }
 
 async function withServices<T extends { id: string }>(db: DbOrTx, requests: T[]) {
@@ -157,31 +194,42 @@ async function withServices<T extends { id: string }>(db: DbOrTx, requests: T[])
 }
 
 /** Pending Callback Requests first (soonest desired time first), then recently decided ones. */
-export async function listCallbackRequests(db: DbOrTx, input: { decidedLimit: number }) {
+export async function listCallbackRequests(db: DbOrTx, input: { companyId: string; decidedLimit: number }) {
   const pending = await db
     .select()
     .from(callbackRequest)
-    .where(eq(callbackRequest.status, "pending"))
+    .where(and(eq(callbackRequest.companyId, input.companyId), eq(callbackRequest.status, "pending")))
     .orderBy(sql`${callbackRequest.desiredStartsAt} asc nulls last`, callbackRequest.createdAt)
   const decided = await db
     .select()
     .from(callbackRequest)
-    .where(ne(callbackRequest.status, "pending"))
+    .where(and(eq(callbackRequest.companyId, input.companyId), ne(callbackRequest.status, "pending")))
     .orderBy(desc(callbackRequest.decidedAt))
     .limit(input.decidedLimit)
   return { pending: await withServices(db, pending), decided: await withServices(db, decided) }
 }
 
-export async function getCallbackRequest(db: DbOrTx, id: string) {
-  const rows = await db.select().from(callbackRequest).where(eq(callbackRequest.id, id))
+export async function getCallbackRequest(
+  db: DbOrTx,
+  input: { companyId: string; callbackRequestId: string }
+) {
+  const rows = await db
+    .select()
+    .from(callbackRequest)
+    .where(
+      and(eq(callbackRequest.id, input.callbackRequestId), eq(callbackRequest.companyId, input.companyId))
+    )
   const [request] = await withServices(db, rows)
   return request ?? null
 }
 
-export async function countPendingCallbackRequests(db: DbOrTx): Promise<number> {
+export async function countPendingCallbackRequests(
+  db: DbOrTx,
+  input: { companyId: string }
+): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(callbackRequest)
-    .where(eq(callbackRequest.status, "pending"))
+    .where(and(eq(callbackRequest.companyId, input.companyId), eq(callbackRequest.status, "pending")))
   return row?.n ?? 0
 }

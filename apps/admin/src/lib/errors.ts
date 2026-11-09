@@ -10,6 +10,10 @@ const messages: Record<string, string> = {
   UNAUTHORIZED: "სესია ამოიწურა. შედით თავიდან.",
   OVERLAP: "ეს დრო გადაფარავს სხვა ჯავშანს ან არასამუშაო დროს.",
   INVALID_STATE: "ეს მოქმედება აღარ არის შესაძლებელი. განაახლეთ გვერდი.",
+  COMPANY_SUSPENDED: "ანგარიში შეჩერებულია: ახალი ჯავშნის შექმნა შეუძლებელია.",
+  PHONE_TAKEN: "ეს ნომერი უკვე სხვა ადმინისტრატორის ნომერია.",
+  LAST_ADMIN_PHONE: "ბოლო ადმინისტრატორის ნომრის წაშლა შეუძლებელია.",
+  LAST_ALERT_PHONE: "შეტყობინებები ერთ ნომერზე მაინც უნდა მოდიოდეს.",
 }
 
 type ErrorData = { domainCode?: string | null; conflicts?: Conflict[] }

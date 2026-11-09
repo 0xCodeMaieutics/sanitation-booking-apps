@@ -18,3 +18,11 @@ export async function findOrNull<T>(lookup: Promise<T>): Promise<T | null> {
     throw error
   }
 }
+
+/** The Company behind a slug, shared by a request's layout, metadata and pages. */
+export const findCompany = cache(async (slug: string) => findOrNull((await serverCaller()).company({ slug })))
+
+/** The Booking behind a Manage Link, shared by its layout and page. */
+export const findBooking = cache(async (token: string) =>
+  findOrNull((await serverCaller()).booking({ token }))
+)

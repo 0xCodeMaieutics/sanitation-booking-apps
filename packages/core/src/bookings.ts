@@ -14,8 +14,10 @@ import {
   schema,
 } from "@sanitation/db"
 
+import { alertAdmins } from "./admin-phones"
 import { isAvailableStartTime, overlapping } from "./availability"
 import { loadCalendar, loadOccupied, lockCalendar } from "./calendar"
+import { getActiveCompany } from "./companies"
 import { DomainError } from "./errors"
 import { adminAlerts, clientMessages } from "./messages"
 import type { Notifier } from "./notifier"
@@ -24,7 +26,7 @@ import { addHours, toLocalDate } from "./time"
 import { createToken, sha256 } from "./tokens"
 import { checkVerificationCode, consumeVerification } from "./verification"
 
-const { booking, callbackRequest, service } = schema
+const { booking, callbackRequest, company, service } = schema
 
 export type Messaging = { notify: Notifier; appUrl: string }
 
@@ -34,6 +36,9 @@ export function manageUrl(appUrl: string, token: string): string {
 
 const bookingColumns = {
   id: booking.id,
+  companyId: booking.companyId,
+  companyName: company.name,
+  companySlug: company.slug,
   serviceId: booking.serviceId,
   serviceName: service.name,
   customService: booking.customService,
@@ -53,7 +58,11 @@ const bookingColumns = {
 }
 
 function selectBookings(db: DbOrTx) {
-  return db.select(bookingColumns).from(booking).leftJoin(service, eq(service.id, booking.serviceId))
+  return db
+    .select(bookingColumns)
+    .from(booking)
+    .innerJoin(company, eq(company.id, booking.companyId))
+    .leftJoin(service, eq(service.id, booking.serviceId))
 }
 
 type BookingRow = Awaited<ReturnType<typeof selectBookings>>[number]
@@ -68,23 +77,32 @@ function withTitle(row: BookingRow): BookingDetails {
   }
 }
 
-async function findBooking(db: DbOrTx, where: SQL): Promise<BookingDetails | null> {
+async function findBooking(db: DbOrTx, where: SQL | undefined): Promise<BookingDetails | null> {
   const [row] = await selectBookings(db).where(where)
   return row === undefined ? null : withTitle(row)
 }
 
-export function getBookingById(db: DbOrTx, id: string) {
-  return findBooking(db, eq(booking.id, id))
+export function getBookingById(db: DbOrTx, input: { companyId: string; bookingId: string }) {
+  return findBooking(db, and(eq(booking.id, input.bookingId), eq(booking.companyId, input.companyId)))
 }
 
+/** The Booking a Manage Link leads to, whichever Company it belongs to. */
 export function getBookingByToken(db: DbOrTx, token: string) {
   return findBooking(db, eq(booking.manageTokenHash, sha256(token)))
 }
 
 /** Bookings for the Admin: everything still Booked, plus anything that started since `since`. */
-export async function listBookings(db: DbOrTx, input: { since: Date }): Promise<BookingDetails[]> {
+export async function listBookings(
+  db: DbOrTx,
+  input: { companyId: string; since: Date }
+): Promise<BookingDetails[]> {
   const rows = await selectBookings(db)
-    .where(or(eq(booking.status, "booked"), gte(booking.startsAt, input.since)))
+    .where(
+      and(
+        eq(booking.companyId, input.companyId),
+        or(eq(booking.status, "booked"), gte(booking.startsAt, input.since))
+      )
+    )
     .orderBy(asc(booking.startsAt))
   return rows.map(withTitle)
 }
@@ -92,10 +110,16 @@ export async function listBookings(db: DbOrTx, input: { since: Date }): Promise<
 /** The Admin's history: Bookings that started before `before`, newest first. */
 export async function listPastBookings(
   db: DbOrTx,
-  input: { before: Date; limit: number }
+  input: { companyId: string; before: Date; limit: number }
 ): Promise<BookingDetails[]> {
   const rows = await selectBookings(db)
-    .where(and(lt(booking.startsAt, input.before), ne(booking.status, "booked")))
+    .where(
+      and(
+        eq(booking.companyId, input.companyId),
+        lt(booking.startsAt, input.before),
+        ne(booking.status, "booked")
+      )
+    )
     .orderBy(desc(booking.startsAt))
     .limit(input.limit)
   return rows.map(withTitle)
@@ -103,10 +127,11 @@ export async function listPastBookings(
 
 async function sendConfirmation(
   m: Messaging,
+  companyName: string,
   b: { title: string; startsAt: Date; phone: string },
   token: string
 ) {
-  await m.notify.client(b.phone, clientMessages.confirmation(b, manageUrl(m.appUrl, token)))
+  await m.notify.client(b.phone, clientMessages.confirmation(companyName, b, manageUrl(m.appUrl, token)))
 }
 
 /** A Client booking a Standard Service at one of its Available Start Times. */
@@ -114,6 +139,7 @@ export async function createClientBooking(
   db: Db,
   m: Messaging,
   input: {
+    companyId: string
     serviceId: string
     startsAt: Date
     clientName: string
@@ -128,16 +154,28 @@ export async function createClientBooking(
   const phone = normalizePhone(input.phone)
   await checkVerificationCode(db, { ...input, phone, purpose: "client" })
 
-  const { bookingId, manageToken, title } = await db.transaction(async (tx) => {
-    await lockCalendar(tx)
+  const { bookingId, manageToken, title, companyName } = await db.transaction(async (tx) => {
+    await lockCalendar(tx, input.companyId)
+    const c = await getActiveCompany(tx, input.companyId)
     const [svc] = await tx
       .select()
       .from(service)
-      .where(and(eq(service.id, input.serviceId), isNull(service.archivedAt)))
+      .where(
+        and(
+          eq(service.id, input.serviceId),
+          eq(service.companyId, input.companyId),
+          isNull(service.archivedAt)
+        )
+      )
     if (svc === undefined) throw new DomainError("NOT_FOUND")
 
     const date = toLocalDate(input.startsAt)
-    const calendar = await loadCalendar(tx, { from: date, to: date, now: input.now })
+    const calendar = await loadCalendar(tx, {
+      companyId: input.companyId,
+      from: date,
+      to: date,
+      now: input.now,
+    })
     if (calendar.pausedDates.has(date)) throw new DomainError("DAY_PAUSED")
     if (!isAvailableStartTime(calendar, input.startsAt, svc.durationHours)) {
       throw new DomainError("START_UNAVAILABLE")
@@ -148,6 +186,7 @@ export async function createClientBooking(
     const [row] = await tx
       .insert(booking)
       .values({
+        companyId: input.companyId,
         serviceId: svc.id,
         startsAt: input.startsAt,
         durationHours: svc.durationHours,
@@ -161,16 +200,20 @@ export async function createClientBooking(
       })
       .returning({ id: booking.id })
     if (row === undefined) throw new Error("Failed to create booking")
-    return { bookingId: row.id, manageToken: token, title: svc.name }
+    return { bookingId: row.id, manageToken: token, title: svc.name, companyName: c.name }
   })
 
   const summary = { title, startsAt: input.startsAt }
-  await sendConfirmation(m, { ...summary, phone }, manageToken)
-  await m.notify.admin(adminAlerts.newBooking({ ...summary, clientName: input.clientName, phone }))
+  await sendConfirmation(m, companyName, { ...summary, phone }, manageToken)
+  await alertAdmins(db, m.notify, {
+    companyId: input.companyId,
+    body: adminAlerts.newBooking({ ...summary, clientName: input.clientName, phone }),
+  })
   return { bookingId, manageToken }
 }
 
 export type AdminBookingInput = {
+  companyId: string
   service: { serviceId: string } | { customService: string }
   startsAt: Date
   /** Required for a Custom Service (its Estimated Duration); defaults to the Service's Duration. */
@@ -199,13 +242,17 @@ export async function createAdminBooking(
 ): Promise<{ bookingId: string }> {
   const phone = normalizePhone(input.phone)
 
-  const { bookingId, manageToken, title } = await db.transaction(async (tx) => {
-    await lockCalendar(tx)
+  const { bookingId, manageToken, title, companyName } = await db.transaction(async (tx) => {
+    await lockCalendar(tx, input.companyId)
+    const c = await getActiveCompany(tx, input.companyId)
     let name: string
     let durationHours: number
     let priceGel: number | null
     if ("serviceId" in input.service) {
-      const [svc] = await tx.select().from(service).where(eq(service.id, input.service.serviceId))
+      const [svc] = await tx
+        .select()
+        .from(service)
+        .where(and(eq(service.id, input.service.serviceId), eq(service.companyId, input.companyId)))
       if (svc === undefined) throw new DomainError("NOT_FOUND")
       name = svc.name
       durationHours = input.durationHours ?? svc.durationHours
@@ -218,14 +265,21 @@ export async function createAdminBooking(
     }
 
     const endsAt = addHours(input.startsAt, durationHours)
-    const conflicts = overlapping(await loadOccupied(tx, input.startsAt, endsAt), input.startsAt, endsAt)
+    const occupied = await loadOccupied(tx, input.companyId, input.startsAt, endsAt)
+    const conflicts = overlapping(occupied, input.startsAt, endsAt)
     if (conflicts.length > 0 && !input.allowOverlap) throw new DomainError("OVERLAP", conflicts)
 
     if (input.callbackRequestId !== undefined) {
       const accepted = await tx
         .update(callbackRequest)
         .set({ status: "accepted", decidedAt: input.now })
-        .where(and(eq(callbackRequest.id, input.callbackRequestId), eq(callbackRequest.status, "pending")))
+        .where(
+          and(
+            eq(callbackRequest.id, input.callbackRequestId),
+            eq(callbackRequest.companyId, input.companyId),
+            eq(callbackRequest.status, "pending")
+          )
+        )
         .returning({ id: callbackRequest.id })
       if (accepted.length === 0) throw new DomainError("INVALID_STATE")
     }
@@ -234,6 +288,7 @@ export async function createAdminBooking(
     const [row] = await tx
       .insert(booking)
       .values({
+        companyId: input.companyId,
         serviceId: "serviceId" in input.service ? input.service.serviceId : null,
         customService: "customService" in input.service ? input.service.customService : null,
         startsAt: input.startsAt,
@@ -249,16 +304,16 @@ export async function createAdminBooking(
       })
       .returning({ id: booking.id })
     if (row === undefined) throw new Error("Failed to create booking")
-    return { bookingId: row.id, manageToken: token, title: name }
+    return { bookingId: row.id, manageToken: token, title: name, companyName: c.name }
   })
 
-  await sendConfirmation(m, { title, startsAt: input.startsAt, phone }, manageToken)
+  await sendConfirmation(m, companyName, { title, startsAt: input.startsAt, phone }, manageToken)
   return { bookingId }
 }
 
 async function endBooking(
   db: DbOrTx,
-  where: SQL,
+  where: SQL | undefined,
   set: { status: "completed" | "cancelled"; cancelledBy?: "client" | "admin" },
   now: Date
 ) {
@@ -270,19 +325,25 @@ async function endBooking(
   if (rows.length === 0) throw new DomainError("INVALID_STATE")
 }
 
-export async function completeBooking(db: Db, input: { bookingId: string; now: Date }): Promise<void> {
-  await endBooking(db, eq(booking.id, input.bookingId), { status: "completed" }, input.now)
+export async function completeBooking(
+  db: Db,
+  input: { companyId: string; bookingId: string; now: Date }
+): Promise<void> {
+  const where = and(eq(booking.id, input.bookingId), eq(booking.companyId, input.companyId))
+  await endBooking(db, where, { status: "completed" }, input.now)
 }
 
 export async function cancelBookingByAdmin(
   db: Db,
   m: Messaging,
-  input: { bookingId: string; now: Date }
+  input: { companyId: string; bookingId: string; now: Date }
 ): Promise<void> {
-  const b = await getBookingById(db, input.bookingId)
+  const b = await getBookingById(db, input)
   if (b === null) throw new DomainError("NOT_FOUND")
   await endBooking(db, eq(booking.id, b.id), { status: "cancelled", cancelledBy: "admin" }, input.now)
-  if (b.startsAt > input.now) await m.notify.client(b.phone, clientMessages.cancelledByAdmin(b))
+  if (b.startsAt > input.now) {
+    await m.notify.client(b.phone, clientMessages.cancelledByAdmin(b.companyName, b))
+  }
 }
 
 /** A Client cancelling through their Manage Link, up to the Booking's start time. */
@@ -296,17 +357,17 @@ export async function cancelBookingByClient(
   if (b.status !== "booked") throw new DomainError("INVALID_STATE")
   if (b.startsAt <= input.now) throw new DomainError("CANCEL_TOO_LATE")
   await endBooking(db, eq(booking.id, b.id), { status: "cancelled", cancelledBy: "client" }, input.now)
-  await m.notify.admin(adminAlerts.cancelledByClient(b))
+  await alertAdmins(db, m.notify, { companyId: b.companyId, body: adminAlerts.cancelledByClient(b) })
 }
 
 export async function setBookingPrice(
   db: Db,
-  input: { bookingId: string; priceGel: number | null }
+  input: { companyId: string; bookingId: string; priceGel: number | null }
 ): Promise<void> {
   const rows = await db
     .update(booking)
     .set({ priceGel: input.priceGel })
-    .where(eq(booking.id, input.bookingId))
+    .where(and(eq(booking.id, input.bookingId), eq(booking.companyId, input.companyId)))
     .returning({ id: booking.id })
   if (rows.length === 0) throw new DomainError("NOT_FOUND")
 }

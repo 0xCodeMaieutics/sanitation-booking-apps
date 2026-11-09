@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
   PENDING_REQUEST_EXISTS: "თქვენ უკვე გაქვთ მოთხოვნა, რომელსაც ჯერ არ უპასუხეს.",
   INVALID_STATE: "ეს მოქმედება აღარ არის შესაძლებელი.",
   CANCEL_TOO_LATE: "ჯავშნის გაუქმება დაწყების შემდეგ შეუძლებელია.",
+  COMPANY_SUSPENDED: "ონლაინ ჯავშანი დროებით მიუწვდომელია.",
 }
 
 export function domainCodeOf(error: unknown): string | null {

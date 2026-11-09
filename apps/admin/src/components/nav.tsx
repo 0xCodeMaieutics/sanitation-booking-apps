@@ -18,14 +18,14 @@ function isActive(pathname: string, href: string) {
 }
 
 /** A sidebar on wide screens and a bottom tab bar on phones. */
-export function Nav({ pendingRequests }: { pendingRequests: number }) {
+export function Nav({ companyName, pendingRequests }: { companyName: string; pendingRequests: number }) {
   const pathname = usePathname()
   return (
     <>
       <aside className="hidden w-60 shrink-0 flex-col gap-6 border-r border-border bg-paper px-3 py-6 md:flex">
-        <div className="flex items-center gap-2.5 px-3 font-semibold">
+        <div className="flex min-w-0 items-center gap-2.5 px-3 font-semibold">
           <Logo />
-          ადმინისტრირება
+          <span className="truncate">{companyName}</span>
         </div>
         <nav className="flex flex-col gap-1" aria-label="მთავარი">
           {links.map((l) => (

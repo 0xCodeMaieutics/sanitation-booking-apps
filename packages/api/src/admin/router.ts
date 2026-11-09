@@ -1,7 +1,9 @@
 import {
   type IsoWeekday,
+  addAdminPhone,
   addDays,
   addTimeOff,
+  bookingLink,
   cancelBookingByAdmin,
   completeBooking,
   countPendingCallbackRequests,
@@ -12,15 +14,16 @@ import {
   getCallbackRequest,
   getSettings,
   listBookings,
+  listAdminPhones,
   listCallbackRequests,
   listPastBookings,
   listServices,
   listTimeOff,
   localInstant,
-  maskPhone,
-  normalizePhone,
+  removeAdminPhone,
   removeTimeOff,
   requestAdminSignInCode,
+  setAdminPhoneAlerts,
   setBookingPrice,
   setServiceArchived,
   signInAdmin,
@@ -59,13 +62,9 @@ const zAdminBooking = z.object({
 })
 
 const authRouter = router({
-  /** The masked Admin phone, shown on the sign-in screen. */
-  phoneHint: publicProcedure.query(({ ctx }) => maskPhone(normalizePhone(ctx.adminPhone))),
-
   sendCode: publicProcedure.input(z.object({ phone: zPhone })).mutation(({ ctx, input }) =>
     requestAdminSignInCode(ctx.db, ctx.messaging.notify, {
       phone: input.phone,
-      adminPhone: ctx.adminPhone,
       ipAddress: ctx.ipAddress,
       now: ctx.now(),
     })
@@ -90,22 +89,51 @@ const authRouter = router({
     return { ok: true as const }
   }),
 
-  /** Whether this device has a valid Admin session. */
-  check: adminProcedure.query(() => ({ ok: true as const })),
+  /** The signed-in Admin's Company; fails when this device has no valid Admin session. */
+  me: adminProcedure.query(({ ctx }) => ({
+    adminPhoneId: ctx.admin.adminPhoneId,
+    companyName: ctx.admin.companyName,
+    suspended: ctx.admin.suspended,
+    bookingLink: bookingLink(ctx.messaging.appUrl, ctx.admin.companySlug),
+  })),
+})
+
+const adminPhonesRouter = router({
+  list: adminProcedure.query(({ ctx }) => listAdminPhones(ctx.db, { companyId: ctx.companyId })),
+
+  add: adminProcedure
+    .input(z.object({ phone: zPhone, alerts: z.boolean() }))
+    .mutation(({ ctx, input }) => addAdminPhone(ctx.db, { ...input, companyId: ctx.companyId })),
+
+  remove: adminProcedure.input(z.object({ adminPhoneId: z.uuid() })).mutation(async ({ ctx, input }) => {
+    await removeAdminPhone(ctx.db, { ...input, companyId: ctx.companyId })
+    return { ok: true as const }
+  }),
+
+  setAlerts: adminProcedure
+    .input(z.object({ adminPhoneId: z.uuid(), alerts: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await setAdminPhoneAlerts(ctx.db, { ...input, companyId: ctx.companyId })
+      return { ok: true as const }
+    }),
 })
 
 const bookingsRouter = router({
   /** Everything still Booked, plus today's Completed and Cancelled ones. */
   upcoming: adminProcedure.query(({ ctx }) =>
-    listBookings(ctx.db, { since: localInstant(toLocalDate(ctx.now())) })
+    listBookings(ctx.db, { companyId: ctx.companyId, since: localInstant(toLocalDate(ctx.now())) })
   ),
 
   past: adminProcedure.query(({ ctx }) =>
-    listPastBookings(ctx.db, { before: localInstant(toLocalDate(ctx.now())), limit: 100 })
+    listPastBookings(ctx.db, {
+      companyId: ctx.companyId,
+      before: localInstant(toLocalDate(ctx.now())),
+      limit: 100,
+    })
   ),
 
   byId: adminProcedure.input(z.object({ bookingId: z.uuid() })).query(async ({ ctx, input }) => {
-    const b = await getBookingById(ctx.db, input.bookingId)
+    const b = await getBookingById(ctx.db, { ...input, companyId: ctx.companyId })
     if (b === null) throw new TRPCError({ code: "NOT_FOUND" })
     return b
   }),
@@ -116,36 +144,41 @@ const bookingsRouter = router({
       const { date, hour, ...rest } = input
       return createAdminBooking(ctx.db, ctx.messaging, {
         ...rest,
+        companyId: ctx.companyId,
         startsAt: localInstant(date, hour),
         now: ctx.now(),
       })
     }),
 
   complete: adminProcedure.input(z.object({ bookingId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await completeBooking(ctx.db, { bookingId: input.bookingId, now: ctx.now() })
+    await completeBooking(ctx.db, { ...input, companyId: ctx.companyId, now: ctx.now() })
     return { ok: true as const }
   }),
 
   cancel: adminProcedure.input(z.object({ bookingId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await cancelBookingByAdmin(ctx.db, ctx.messaging, { bookingId: input.bookingId, now: ctx.now() })
+    await cancelBookingByAdmin(ctx.db, ctx.messaging, { ...input, companyId: ctx.companyId, now: ctx.now() })
     return { ok: true as const }
   }),
 
   setPrice: adminProcedure
     .input(z.object({ bookingId: z.uuid(), priceGel: zPrice.nullable() }))
     .mutation(async ({ ctx, input }) => {
-      await setBookingPrice(ctx.db, input)
+      await setBookingPrice(ctx.db, { ...input, companyId: ctx.companyId })
       return { ok: true as const }
     }),
 })
 
 const callbackRequestsRouter = router({
-  list: adminProcedure.query(({ ctx }) => listCallbackRequests(ctx.db, { decidedLimit: 30 })),
+  list: adminProcedure.query(({ ctx }) =>
+    listCallbackRequests(ctx.db, { companyId: ctx.companyId, decidedLimit: 30 })
+  ),
 
-  pendingCount: adminProcedure.query(({ ctx }) => countPendingCallbackRequests(ctx.db)),
+  pendingCount: adminProcedure.query(({ ctx }) =>
+    countPendingCallbackRequests(ctx.db, { companyId: ctx.companyId })
+  ),
 
   byId: adminProcedure.input(z.object({ callbackRequestId: z.uuid() })).query(async ({ ctx, input }) => {
-    const r = await getCallbackRequest(ctx.db, input.callbackRequestId)
+    const r = await getCallbackRequest(ctx.db, { ...input, companyId: ctx.companyId })
     if (r === null) throw new TRPCError({ code: "NOT_FOUND" })
     return r
   }),
@@ -153,33 +186,41 @@ const callbackRequestsRouter = router({
   decline: adminProcedure
     .input(z.object({ callbackRequestId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await declineCallbackRequest(ctx.db, ctx.messaging, { ...input, now: ctx.now() })
+      await declineCallbackRequest(ctx.db, ctx.messaging, {
+        ...input,
+        companyId: ctx.companyId,
+        now: ctx.now(),
+      })
       return { ok: true as const }
     }),
 })
 
 const servicesRouter = router({
-  list: adminProcedure.query(({ ctx }) => listServices(ctx.db, { includeArchived: true })),
+  list: adminProcedure.query(({ ctx }) =>
+    listServices(ctx.db, { companyId: ctx.companyId, includeArchived: true })
+  ),
 
-  create: adminProcedure.input(zServiceInput).mutation(({ ctx, input }) => createService(ctx.db, input)),
+  create: adminProcedure
+    .input(zServiceInput)
+    .mutation(({ ctx, input }) => createService(ctx.db, { ...input, companyId: ctx.companyId })),
 
   update: adminProcedure
     .input(zServiceInput.extend({ serviceId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await updateService(ctx.db, input)
+      await updateService(ctx.db, { ...input, companyId: ctx.companyId })
       return { ok: true as const }
     }),
 
   setArchived: adminProcedure
     .input(z.object({ serviceId: z.uuid(), archived: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      await setServiceArchived(ctx.db, { ...input, now: ctx.now() })
+      await setServiceArchived(ctx.db, { ...input, companyId: ctx.companyId, now: ctx.now() })
       return { ok: true as const }
     }),
 })
 
 const timeOffRouter = router({
-  list: adminProcedure.query(({ ctx }) => listTimeOff(ctx.db, { now: ctx.now() })),
+  list: adminProcedure.query(({ ctx }) => listTimeOff(ctx.db, { companyId: ctx.companyId, now: ctx.now() })),
 
   add: adminProcedure
     .input(
@@ -194,18 +235,18 @@ const timeOffRouter = router({
       if (input.date < toLocalDate(ctx.now()) || input.date > addDays(toLocalDate(ctx.now()), 366)) {
         throw new TRPCError({ code: "BAD_REQUEST" })
       }
-      await addTimeOff(ctx.db, input)
+      await addTimeOff(ctx.db, { ...input, companyId: ctx.companyId })
       return { ok: true as const }
     }),
 
   remove: adminProcedure.input(z.object({ timeOffId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await removeTimeOff(ctx.db, input)
+    await removeTimeOff(ctx.db, { ...input, companyId: ctx.companyId })
     return { ok: true as const }
   }),
 })
 
 const settingsRouter = router({
-  get: adminProcedure.query(({ ctx }) => getSettings(ctx.db)),
+  get: adminProcedure.query(({ ctx }) => getSettings(ctx.db, { companyId: ctx.companyId })),
 
   update: adminProcedure
     .input(
@@ -216,6 +257,7 @@ const settingsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await updateSettings(ctx.db, {
+        companyId: ctx.companyId,
         minNoticeHours: input.minNoticeHours,
         workingDays: input.workingDays as IsoWeekday[],
       })
@@ -225,6 +267,7 @@ const settingsRouter = router({
 
 export const adminRouter = router({
   auth: authRouter,
+  adminPhones: adminPhonesRouter,
   bookings: bookingsRouter,
   callbackRequests: callbackRequestsRouter,
   services: servicesRouter,
