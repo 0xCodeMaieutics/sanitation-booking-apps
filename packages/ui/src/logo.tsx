@@ -1,6 +1,6 @@
 import { cn } from "cn"
 
-/** The droplet mark used in both apps' headers and as their favicon. */
+/** The droplet mark used in both apps' headers and as the customer app's favicon (admin's favicon uses an ink background). */
 export function Logo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" aria-hidden className={cn("size-7 shrink-0", className)}>
