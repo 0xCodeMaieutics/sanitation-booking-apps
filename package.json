@@ -15,6 +15,7 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "turbo-env:check": "node scripts/check-turbo-env.mts",
+    "risk-tier": "node scripts/risk-tier.mts",
     "db:generate": "pnpm --filter @sanitation/db generate",
     "db:migrate": "pnpm --filter @sanitation/db migrate",
     "db:seed": "pnpm --filter @sanitation/db seed",
