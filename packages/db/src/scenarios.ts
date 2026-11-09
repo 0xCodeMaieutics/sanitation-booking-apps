@@ -42,6 +42,8 @@ export type Scenario = {
   suspended?: boolean
   minNoticeHours?: number
   workingDays?: number[]
+  firstStartHour?: number
+  lastStartHour?: number
   services?: ScenarioService[]
   bookings?: ScenarioBooking[]
   callbackRequests?: ScenarioCallbackRequest[]
@@ -180,6 +182,16 @@ export const scenarios: Scenario[] = [
     purpose: "Zero Minimum Notice: the next hour today can be booked.",
     adminPhone: "+995555000010",
     minNoticeHours: 0,
+  },
+  {
+    slug: "test-24-hours",
+    name: "ტესტი: 24 საათი",
+    purpose:
+      "Works around the clock (00:00–23:00 start times). A 3-hour Booking at 23:00 today runs into tomorrow, so tomorrow opens at 02:00.",
+    adminPhone: "+995555000014",
+    firstStartHour: 0,
+    lastStartHour: 23,
+    bookings: [{ day: 0, hour: 23, service: 2 }],
   },
   {
     slug: "test-double-booked",

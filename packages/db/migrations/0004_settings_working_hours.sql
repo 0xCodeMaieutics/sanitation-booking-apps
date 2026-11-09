@@ -1,0 +1,3 @@
+ALTER TABLE "settings" ADD COLUMN "first_start_hour" smallint DEFAULT 9 NOT NULL;--> statement-breakpoint
+ALTER TABLE "settings" ADD COLUMN "last_start_hour" smallint DEFAULT 18 NOT NULL;--> statement-breakpoint
+ALTER TABLE "settings" ADD CONSTRAINT "settings_working_hours" CHECK (0 <= "settings"."first_start_hour" and "settings"."first_start_hour" <= "settings"."last_start_hour" and "settings"."last_start_hour" <= 23);

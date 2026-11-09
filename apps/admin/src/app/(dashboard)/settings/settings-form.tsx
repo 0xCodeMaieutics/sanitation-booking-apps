@@ -1,6 +1,6 @@
 "use client"
 
-import { type IsoWeekday, WEEKDAYS } from "@sanitation/core/time"
+import { type IsoWeekday, WEEKDAYS, formatHour } from "@sanitation/core/time"
 import {
   Button,
   Field,
@@ -20,12 +20,21 @@ import { useRefreshingMutation } from "@/trpc/use-refreshing-mutation"
 
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7]
 const NOTICE_OPTIONS = [0, 1, 2, 3, 4, 6, 8, 12, 24, 48, 72]
+const HOURS = Array.from({ length: 24 }, (_, h) => h)
 
-export function SettingsForm(props: { minNoticeHours: number; workingDays: IsoWeekday[] }) {
+export function SettingsForm(props: {
+  minNoticeHours: number
+  workingDays: IsoWeekday[]
+  firstStartHour: number
+  lastStartHour: number
+}) {
   const trpc = useTRPC()
   const [minNoticeHours, setMinNoticeHours] = useState(props.minNoticeHours)
   const [workingDays, setWorkingDays] = useState(new Set(props.workingDays))
+  const [firstStartHour, setFirstStartHour] = useState(props.firstStartHour)
+  const [lastStartHour, setLastStartHour] = useState(props.lastStartHour)
   const [saved, setSaved] = useState(false)
+  const hoursInvalid = lastStartHour < firstStartHour
   const save = useRefreshingMutation(
     trpc.settings.update.mutationOptions({ onSuccess: () => setSaved(true) })
   )
@@ -43,7 +52,12 @@ export function SettingsForm(props: { minNoticeHours: number; workingDays: IsoWe
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    save.mutate({ minNoticeHours, workingDays: DAYS.filter((d) => workingDays.has(d)) })
+    save.mutate({
+      minNoticeHours,
+      workingDays: DAYS.filter((d) => workingDays.has(d)),
+      firstStartHour,
+      lastStartHour,
+    })
   }
 
   return (
@@ -52,6 +66,55 @@ export function SettingsForm(props: { minNoticeHours: number; workingDays: IsoWe
       className="flex flex-col gap-5 rounded-2xl bg-paper p-4 ring-1 ring-border"
       noValidate
     >
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-sm font-medium">სამუშაო საათები</legend>
+        <div className="grid grid-cols-2 gap-2">
+          <Field>
+            <FieldLabel htmlFor="firstStartHour">პირველი საათი</FieldLabel>
+            <NativeSelect
+              id="firstStartHour"
+              className="w-full"
+              value={firstStartHour}
+              onChange={(e) => {
+                setFirstStartHour(Number(e.target.value))
+                setSaved(false)
+              }}
+              aria-describedby="workingHours-help"
+            >
+              {HOURS.map((h) => (
+                <NativeSelectOption key={h} value={h}>
+                  {formatHour(h)}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="lastStartHour">ბოლო საათი</FieldLabel>
+            <NativeSelect
+              id="lastStartHour"
+              className="w-full"
+              value={lastStartHour}
+              onChange={(e) => {
+                setLastStartHour(Number(e.target.value))
+                setSaved(false)
+              }}
+              aria-describedby="workingHours-help"
+              aria-invalid={hoursInvalid}
+            >
+              {HOURS.map((h) => (
+                <NativeSelectOption key={h} value={h}>
+                  {formatHour(h)}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Field>
+        </div>
+        <FieldDescription id="workingHours-help">
+          კლიენტი აირჩევს დაწყების საათს ამ შუალედში. 24 საათით მუშაობისთვის აირჩიეთ 00:00 და 23:00.
+        </FieldDescription>
+        {hoursInvalid ? <FieldError>ბოლო საათი პირველზე ადრე ვერ იქნება.</FieldError> : null}
+      </fieldset>
+
       <Field>
         <FieldLabel htmlFor="minNotice">მინიმალური წინასწარი დრო (საათი)</FieldLabel>
         <NativeSelect
@@ -106,7 +169,7 @@ export function SettingsForm(props: { minNoticeHours: number; workingDays: IsoWe
       {workingDays.size === 0 ? <FieldError>აირჩიეთ ერთი დღე მაინც.</FieldError> : null}
       {save.error !== null ? <FieldError>{errorMessage(save.error)}</FieldError> : null}
 
-      <Button type="submit" size="lg" disabled={save.isPending || workingDays.size === 0}>
+      <Button type="submit" size="lg" disabled={save.isPending || workingDays.size === 0 || hoursInvalid}>
         {save.isPending ? "ინახება…" : saved ? "შენახულია" : "შენახვა"}
       </Button>
     </form>

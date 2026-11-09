@@ -328,9 +328,13 @@ async function seedScenario(s: Scenario): Promise<void> {
       .insert(schema.companySlug)
       .values([s.slug, ...(s.formerSlugs ?? [])].map((slug) => ({ slug, companyId })))
     await tx.insert(schema.adminPhone).values({ companyId, phone: s.adminPhone })
-    await tx
-      .insert(schema.settings)
-      .values({ companyId, minNoticeHours: s.minNoticeHours, workingDays: s.workingDays })
+    await tx.insert(schema.settings).values({
+      companyId,
+      minNoticeHours: s.minNoticeHours,
+      workingDays: s.workingDays,
+      firstStartHour: s.firstStartHour,
+      lastStartHour: s.lastStartHour,
+    })
     const services = await tx
       .insert(schema.service)
       .values(

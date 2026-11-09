@@ -261,16 +261,22 @@ const settingsRouter = router({
 
   update: adminProcedure
     .input(
-      z.object({
-        minNoticeHours: z.number().int().min(0).max(72),
-        workingDays: z.array(z.number().int().min(1).max(7)).min(1).max(7),
-      })
+      z
+        .object({
+          minNoticeHours: z.number().int().min(0).max(72),
+          workingDays: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+          firstStartHour: z.number().int().min(0).max(23),
+          lastStartHour: z.number().int().min(0).max(23),
+        })
+        .refine((s) => s.firstStartHour <= s.lastStartHour, "Expected firstStartHour <= lastStartHour")
     )
     .mutation(async ({ ctx, input }) => {
       await updateSettings(ctx.db, {
         companyId: ctx.companyId,
         minNoticeHours: input.minNoticeHours,
         workingDays: input.workingDays as IsoWeekday[],
+        firstStartHour: input.firstStartHour,
+        lastStartHour: input.lastStartHour,
       })
       return { ok: true as const }
     }),
