@@ -1,0 +1,1 @@
+ALTER TABLE "callback_request" ADD COLUMN "paused_date" date;

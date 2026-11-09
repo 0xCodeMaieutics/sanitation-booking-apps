@@ -1,7 +1,15 @@
 "use client"
 
 import type { Conflict } from "@sanitation/core"
-import { type LocalDate, formatHour, toLocalHour } from "@sanitation/core/time"
+import { normalizePhone } from "@sanitation/core/phone"
+import {
+  type LocalDate,
+  addHours,
+  formatHour,
+  isLocalDate,
+  localInstant,
+  toLocalHour,
+} from "@sanitation/core/time"
 import {
   Button,
   Field,
@@ -27,11 +35,26 @@ import { ConfirmDialog } from "./confirm-dialog"
 
 const CUSTOM = "custom"
 
+/** Keyed by the field's element id, so the first one can be focused. */
+type FieldErrors = Partial<
+  Record<"customService" | "date" | "hour" | "duration" | "clientName" | "phone" | "address", string>
+>
+
+function isValidPhone(phone: string): boolean {
+  try {
+    normalizePhone(phone)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export type AdminBookingDefaults = {
   serviceId: string | null
   customService: string
   date: LocalDate
-  hour: number
+  /** Null leaves the start time for the Admin to choose. */
+  hour: number | null
   durationHours: number | null
   clientName: string
   phone: string
@@ -45,11 +68,14 @@ export type AdminBookingDefaults = {
  */
 export function AdminBookingForm({
   services,
+  occupied,
   defaults,
   callbackRequestId,
   submitLabel,
 }: {
   services: AdminService[]
+  /** Taken time; start hours and durations that would run into it are hidden unless the Admin asks to see them. */
+  occupied: { startsAt: Date; endsAt: Date }[]
   defaults: AdminBookingDefaults
   callbackRequestId?: string
   submitLabel: string
@@ -69,7 +95,25 @@ export function AdminBookingForm({
   const [address, setAddress] = useState(defaults.address)
   const [note, setNote] = useState(defaults.note)
   const [conflicts, setConflicts] = useState<Conflict[] | null>(null)
-  const [invalid, setInvalid] = useState<string | null>(null)
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [showTaken, setShowTaken] = useState(false)
+
+  const fits = (h: number, durationHours: number) => {
+    if (!isLocalDate(date)) return true
+    const startsAt = localInstant(date, h)
+    const endsAt = addHours(startsAt, durationHours)
+    return occupied.every((o) => o.endsAt <= startsAt || endsAt <= o.startsAt)
+  }
+  const isFree = (h: number) => fits(h, duration === "" ? 1 : Number(duration))
+  const hours = Array.from({ length: 24 }, (_, h) => h).filter((h) => showTaken || h === hour || isFree(h))
+  const durations = Array.from({ length: 12 }, (_, i) => i + 1).filter(
+    (d) => showTaken || hour === null || String(d) === duration || fits(hour, d)
+  )
+  const durationLabel = (d: number) => {
+    if (hour === null) return formatDuration(d)
+    const label = `${formatDuration(d)} · ${formatHour(hour)}–${formatHour((hour + d) % 24)}`
+    return fits(hour, d) ? label : `${label} · დაკავებულია`
+  }
 
   const create = useRefreshingMutation(
     trpc.bookings.create.mutationOptions({
@@ -89,11 +133,26 @@ export function AdminBookingForm({
     }
   }
 
+  const validate = (): FieldErrors => {
+    const isCustom = serviceId === CUSTOM
+    const found: FieldErrors = {}
+    if (isCustom && customService.trim().length < 2) found.customService = "აღწერეთ სამუშაო."
+    if (!isLocalDate(date)) found.date = "მიუთითეთ თარიღი."
+    if (hour === null) found.hour = "მიუთითეთ დაწყების დრო."
+    if (isCustom && duration === "") found.duration = "მიუთითეთ სავარაუდო ხანგრძლივობა."
+    if (clientName.trim().length < 2) found.clientName = "მიუთითეთ კლიენტის სახელი."
+    if (!isValidPhone(phone)) found.phone = "შეიყვანეთ ქართული მობილურის ნომერი, მაგ. 555 12 34 56."
+    if (address.trim().length < 3) found.address = "მიუთითეთ მისამართი."
+    return found
+  }
+
   const send = (allowOverlap: boolean) => {
     const isCustom = serviceId === CUSTOM
-    if (isCustom && customService.trim().length < 2) return setInvalid("აღწერეთ სამუშაო.")
-    if (isCustom && duration === "") return setInvalid("მიუთითეთ სავარაუდო ხანგრძლივობა.")
-    setInvalid(null)
+    const found = validate()
+    setErrors(found)
+    const firstInvalid = Object.keys(found)[0]
+    if (firstInvalid !== undefined) document.getElementById(firstInvalid)?.focus()
+    if (firstInvalid !== undefined || hour === null) return
     create.mutate({
       service: isCustom ? { customService } : { serviceId },
       date,
@@ -136,7 +195,7 @@ export function AdminBookingForm({
       </Field>
 
       {serviceId === CUSTOM ? (
-        <Field>
+        <Field data-invalid={errors.customService !== undefined}>
           <FieldLabel htmlFor="customService">სამუშაოს აღწერა</FieldLabel>
           <Textarea
             id="customService"
@@ -144,31 +203,48 @@ export function AdminBookingForm({
             value={customService}
             onChange={(e) => setCustomService(e.target.value)}
             maxLength={300}
+            aria-invalid={errors.customService !== undefined}
           />
+          {errors.customService !== undefined ? <FieldError>{errors.customService}</FieldError> : null}
         </Field>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3">
-        <Field>
+        <Field data-invalid={errors.date !== undefined}>
           <FieldLabel htmlFor="date">თარიღი</FieldLabel>
-          <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <Input
+            id="date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            aria-invalid={errors.date !== undefined}
+          />
+          {errors.date !== undefined ? <FieldError>{errors.date}</FieldError> : null}
         </Field>
-        <Field>
+        <Field data-invalid={errors.hour !== undefined}>
           <FieldLabel htmlFor="hour">დაწყება</FieldLabel>
           <NativeSelect
             id="hour"
             className="w-full"
-            value={hour}
-            onChange={(e) => setHour(Number(e.target.value))}
+            value={hour ?? ""}
+            onChange={(e) => setHour(e.target.value === "" ? null : Number(e.target.value))}
+            aria-invalid={errors.hour !== undefined}
           >
-            {Array.from({ length: 24 }, (_, h) => (
+            {hour === null ? <NativeSelectOption value="">აირჩიეთ</NativeSelectOption> : null}
+            {hours.map((h) => (
               <NativeSelectOption key={h} value={h}>
-                {formatHour(h)}
+                {isFree(h) ? formatHour(h) : `${formatHour(h)} · დაკავებულია`}
               </NativeSelectOption>
             ))}
           </NativeSelect>
+          {errors.hour !== undefined ? (
+            <FieldError>{errors.hour}</FieldError>
+          ) : hours.length === 0 ? (
+            <FieldDescription>ამ დღეს თავისუფალი დრო აღარ არის.</FieldDescription>
+          ) : null}
         </Field>
-        <Field>
+        <Field data-invalid={errors.duration !== undefined}>
           <FieldLabel htmlFor="duration">
             {serviceId === CUSTOM ? "სავარაუდო ხანგრძლივობა" : "ხანგრძლივობა"}
           </FieldLabel>
@@ -177,14 +253,16 @@ export function AdminBookingForm({
             className="w-full"
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
+            aria-invalid={errors.duration !== undefined}
           >
             {serviceId === CUSTOM ? <NativeSelectOption value="">აირჩიეთ</NativeSelectOption> : null}
-            {Array.from({ length: 12 }, (_, i) => (
-              <NativeSelectOption key={i + 1} value={String(i + 1)}>
-                {formatDuration(i + 1)}
+            {durations.map((d) => (
+              <NativeSelectOption key={d} value={String(d)}>
+                {durationLabel(d)}
               </NativeSelectOption>
             ))}
           </NativeSelect>
+          {errors.duration !== undefined ? <FieldError>{errors.duration}</FieldError> : null}
         </Field>
         <Field>
           <FieldLabel htmlFor="price">ფასი (₾)</FieldLabel>
@@ -197,12 +275,28 @@ export function AdminBookingForm({
           />
         </Field>
       </div>
+      <label className="-mt-2 flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          className="size-5 accent-brand"
+          checked={showTaken}
+          onChange={(e) => setShowTaken(e.target.checked)}
+        />
+        დაკავებული დროის ჩვენებაც
+      </label>
 
-      <Field>
+      <Field data-invalid={errors.clientName !== undefined}>
         <FieldLabel htmlFor="clientName">კლიენტის სახელი</FieldLabel>
-        <Input id="clientName" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+        <Input
+          id="clientName"
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+          maxLength={120}
+          aria-invalid={errors.clientName !== undefined}
+        />
+        {errors.clientName !== undefined ? <FieldError>{errors.clientName}</FieldError> : null}
       </Field>
-      <Field>
+      <Field data-invalid={errors.phone !== undefined}>
         <FieldLabel htmlFor="phone">მობილური</FieldLabel>
         <Input
           id="phone"
@@ -211,13 +305,26 @@ export function AdminBookingForm({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="555 12 34 56"
+          maxLength={20}
+          aria-invalid={errors.phone !== undefined}
           aria-describedby="phone-help"
         />
-        <FieldDescription id="phone-help">კლიენტი მიიღებს დადასტურების SMS-ს.</FieldDescription>
+        {errors.phone !== undefined ? (
+          <FieldError>{errors.phone}</FieldError>
+        ) : (
+          <FieldDescription id="phone-help">კლიენტი მიიღებს დადასტურების SMS-ს.</FieldDescription>
+        )}
       </Field>
-      <Field>
+      <Field data-invalid={errors.address !== undefined}>
         <FieldLabel htmlFor="address">მისამართი</FieldLabel>
-        <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
+        <Input
+          id="address"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          maxLength={300}
+          aria-invalid={errors.address !== undefined}
+        />
+        {errors.address !== undefined ? <FieldError>{errors.address}</FieldError> : null}
       </Field>
       <Field>
         <FieldLabel htmlFor="note">
@@ -232,7 +339,6 @@ export function AdminBookingForm({
         />
       </Field>
 
-      {invalid !== null ? <FieldError>{invalid}</FieldError> : null}
       {showError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
 
       <Button type="submit" size="lg" disabled={create.isPending}>

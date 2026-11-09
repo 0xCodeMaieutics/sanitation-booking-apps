@@ -1,5 +1,6 @@
 "use client"
 
+import type { LocalDate } from "@sanitation/core/time"
 import { Button, Field, FieldLabel, FieldLegend, FieldSet, Input } from "@sanitation/ui"
 import { useMutation } from "@tanstack/react-query"
 import { CheckIcon, PauseCircleIcon, PhoneCallIcon } from "lucide-react"
@@ -20,9 +21,11 @@ const optionClassName =
 
 /** The Callback Request form shown on a Paused Day. */
 export function CallbackForm({
+  date,
   services,
   preselectedServiceId,
 }: {
+  date: LocalDate
   services: ServiceSummary[]
   preselectedServiceId: string | null
 }) {
@@ -72,6 +75,7 @@ export function CallbackForm({
             phone: contact.phone,
             verificationId,
             code,
+            date,
             serviceIds,
             description: otherSelected ? other : "",
             clientName: contact.clientName,

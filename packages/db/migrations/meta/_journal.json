@@ -15,6 +15,13 @@
       "when": 1794216115932,
       "tag": "0001_companies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794219188500,
+      "tag": "0002_callback_request_paused_date",
+      "breakpoints": true
     }
   ]
 }

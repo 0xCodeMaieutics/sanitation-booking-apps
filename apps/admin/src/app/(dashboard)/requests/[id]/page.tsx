@@ -1,5 +1,5 @@
 import { formatPhone } from "@sanitation/core/phone"
-import { formatDateTime, toLocalDate, toLocalHour } from "@sanitation/core/time"
+import { formatDate, formatDateTime, toLocalDate, toLocalHour } from "@sanitation/core/time"
 import { Badge } from "@sanitation/ui"
 import { PauseCircleIcon, PhoneIcon } from "lucide-react"
 import { notFound } from "next/navigation"
@@ -7,7 +7,7 @@ import type { ReactNode } from "react"
 
 import { AdminBookingForm } from "@/components/admin-booking-form"
 import { PageHeader } from "@/components/page-header"
-import { REQUEST_STATUS_LABEL, requestTitle } from "@/lib/format"
+import { REQUEST_STATUS_LABEL, requestDate, requestTitle } from "@/lib/format"
 import { findOrNull, requireAdmin } from "@/server/caller"
 
 import { DeclineRequest } from "./decline-request"
@@ -27,10 +27,10 @@ export default async function RequestPage({ params }: PageProps<"/requests/[id]"
   const caller = await requireAdmin()
   const request = await findOrNull(caller.callbackRequests.byId({ callbackRequestId: id }))
   if (request === null) notFound()
-  const services = await caller.services.list()
+  const [services, occupied] = await Promise.all([caller.services.list(), caller.bookings.occupied()])
   const status = REQUEST_STATUS_LABEL[request.status]
   const pending = request.status === "pending"
-  const desired = request.desiredStartsAt ?? new Date()
+  const defaultDate = requestDate(request) ?? toLocalDate(new Date())
   const onlyService =
     request.services.length === 1 && request.description === "" ? request.services[0] : undefined
   const knownService = services.find((s) => s.id === onlyService?.id && s.archivedAt === null)
@@ -60,6 +60,9 @@ export default async function RequestPage({ params }: PageProps<"/requests/[id]"
           ) : null}
           {request.desiredStartsAt !== null ? (
             <Row label="სასურველი დრო">{formatDateTime(request.desiredStartsAt)}</Row>
+          ) : null}
+          {request.pausedDate !== null ? (
+            <Row label="სასურველი დღე">{formatDate(request.pausedDate)}</Row>
           ) : null}
           <Row label="კლიენტი">
             {request.clientName !== "" ? <span className="block">{request.clientName}</span> : null}
@@ -96,13 +99,14 @@ export default async function RequestPage({ params }: PageProps<"/requests/[id]"
               </div>
               <AdminBookingForm
                 services={services}
+                occupied={occupied}
                 callbackRequestId={request.id}
                 submitLabel="მიღება და დაჯავშნა"
                 defaults={{
                   serviceId: knownService?.id ?? null,
                   customService: requestTitle(request),
-                  date: toLocalDate(desired),
-                  hour: request.desiredStartsAt === null ? 9 : toLocalHour(desired),
+                  date: defaultDate,
+                  hour: request.desiredStartsAt === null ? null : toLocalHour(request.desiredStartsAt),
                   durationHours: knownService?.durationHours ?? null,
                   clientName: request.clientName,
                   phone: request.phone,

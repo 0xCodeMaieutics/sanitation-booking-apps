@@ -23,6 +23,8 @@ export type ScenarioBooking = At & {
 export type ScenarioCallbackRequest = {
   /** Set for a Custom Service request: while Pending it pauses that day. Unset for one left on a Paused Day. */
   desired?: At
+  /** The Paused Day it was left on, as a `day` offset. Unset for a Custom Service request. */
+  pausedDay?: number
   description?: string
   /** Indexes of the Standard Services ticked on a Paused Day's form. */
   services?: number[]
@@ -125,8 +127,8 @@ export const scenarios: Scenario[] = [
     ],
     callbackRequests: [
       { desired: { day: 0, hour: 14 }, description: "სარდაფში წყალი დგას, ტუმბო გვჭირდება" },
-      { services: [0, 1], note: "დილით მირჩევნია" },
-      { description: "ეზოში ძველი ჭა უნდა ამოივსოს" },
+      { pausedDay: 0, services: [0, 1], note: "დილით მირჩევნია" },
+      { pausedDay: 0, description: "ეზოში ძველი ჭა უნდა ამოივსოს" },
     ],
   },
   {

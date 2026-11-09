@@ -146,7 +146,7 @@ export function BookingFlow({
       </section>
 
       {day?.status === "paused" ? (
-        <CallbackForm key={date} services={services} preselectedServiceId={service.id} />
+        <CallbackForm key={date} date={date} services={services} preselectedServiceId={service.id} />
       ) : (
         <section className="flex flex-col gap-3" aria-labelledby="time-heading">
           <h2 id="time-heading" className="text-base">

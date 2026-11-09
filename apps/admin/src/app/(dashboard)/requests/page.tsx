@@ -1,29 +1,26 @@
 import { formatPhone } from "@sanitation/core/phone"
-import { formatDateTime } from "@sanitation/core/time"
-import { Badge, cn } from "@sanitation/ui"
+import { formatDate, formatDateTime, formatHour, toLocalHour } from "@sanitation/core/time"
+import { Badge } from "@sanitation/ui"
 import { ChevronRightIcon, PauseCircleIcon } from "lucide-react"
 import Link from "next/link"
 
 import { PageHeader } from "@/components/page-header"
-import { REQUEST_STATUS_LABEL, requestTitle } from "@/lib/format"
+import { REQUEST_STATUS_LABEL, dayHeading, requestDate, requestTitle } from "@/lib/format"
 import { requireAdmin } from "@/server/caller"
 import type { AdminCallbackRequest } from "@/trpc/types"
 
-function RequestCard({ request }: { request: AdminCallbackRequest }) {
+/** `underDay` drops the date from the card when it sits under that day's heading. */
+function RequestCard({ request, underDay = false }: { request: AdminCallbackRequest; underDay?: boolean }) {
   const status = REQUEST_STATUS_LABEL[request.status]
-  const pending = request.status === "pending"
   return (
     <Link
       href={`/requests/${request.id}`}
-      className={cn(
-        "flex items-center gap-3 rounded-2xl bg-paper p-4 ring-1 ring-border transition-colors duration-150 hover:ring-brand-soft focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        !pending && "opacity-70"
-      )}
+      className="flex items-center gap-3 rounded-2xl bg-paper p-4 ring-1 ring-border transition-colors duration-150 hover:ring-brand-soft focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={status.variant}>{status.label}</Badge>
-          {pending && request.desiredStartsAt !== null ? (
+          {request.desiredStartsAt !== null ? (
             <Badge variant="destructive">
               <PauseCircleIcon aria-hidden />
               დღე შეჩერებულია
@@ -36,7 +33,15 @@ function RequestCard({ request }: { request: AdminCallbackRequest }) {
           {formatPhone(request.phone)}
         </span>
         {request.desiredStartsAt !== null ? (
-          <span className="text-sm">სასურველი დრო: {formatDateTime(request.desiredStartsAt)}</span>
+          <span className="text-sm">
+            სასურველი დრო:{" "}
+            {underDay
+              ? formatHour(toLocalHour(request.desiredStartsAt))
+              : formatDateTime(request.desiredStartsAt)}
+          </span>
+        ) : null}
+        {request.pausedDate !== null && !underDay ? (
+          <span className="text-sm">სასურველი დღე: {formatDate(request.pausedDate)}</span>
         ) : null}
       </div>
       <ChevronRightIcon aria-hidden className="size-5 shrink-0 text-ink-soft" />
@@ -46,7 +51,11 @@ function RequestCard({ request }: { request: AdminCallbackRequest }) {
 
 export default async function RequestsPage() {
   const caller = await requireAdmin()
-  const { pending, decided } = await caller.callbackRequests.list()
+  const pending = await caller.callbackRequests.list()
+  const now = new Date()
+  const byDay = [...Map.groupBy(pending, requestDate)].toSorted(([a], [b]) =>
+    a === null ? 1 : b === null ? -1 : a.localeCompare(b)
+  )
 
   return (
     <>
@@ -63,19 +72,24 @@ export default async function RequestsPage() {
             ახალი მოთხოვნები არ არის.
           </p>
         ) : (
-          pending.map((r) => <RequestCard key={r.id} request={r} />)
+          <div className="flex flex-col gap-6">
+            {byDay.map(([date, items]) => (
+              <section
+                key={date ?? "none"}
+                className="flex flex-col gap-2"
+                aria-labelledby={`day-${date ?? "none"}`}
+              >
+                <h3 id={`day-${date ?? "none"}`} className="text-sm font-semibold text-ink-soft">
+                  {date === null ? "თარიღის გარეშე" : dayHeading(date, now)}
+                </h3>
+                {items.map((r) => (
+                  <RequestCard key={r.id} request={r} underDay={date !== null} />
+                ))}
+              </section>
+            ))}
+          </div>
         )}
       </section>
-      {decided.length > 0 ? (
-        <section className="mt-8 flex flex-col gap-2" aria-labelledby="decided">
-          <h2 id="decided" className="text-sm font-semibold text-ink-soft">
-            ბოლოს განხილული
-          </h2>
-          {decided.map((r) => (
-            <RequestCard key={r.id} request={r} />
-          ))}
-        </section>
-      ) : null}
     </>
   )
 }

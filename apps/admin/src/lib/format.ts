@@ -27,6 +27,11 @@ export function requestTitle(r: { services: { name: string }[]; description: str
   return parts.length === 0 ? "უკუკავშირი" : parts.join(", ")
 }
 
+/** The day a Callback Request is for: its desired start time's, or the Paused Day it was left on. */
+export function requestDate(r: { desiredStartsAt: Date | null; pausedDate: LocalDate | null }) {
+  return r.desiredStartsAt !== null ? toLocalDate(r.desiredStartsAt) : r.pausedDate
+}
+
 export const REQUEST_STATUS_LABEL = {
   pending: { label: "მოლოდინში", variant: "warning" },
   accepted: { label: "მიღებული", variant: "success" },
