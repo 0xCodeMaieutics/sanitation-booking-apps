@@ -22,7 +22,11 @@ make setup      # .env, install, Postgres on :5434, migrate, seed
 pnpm dev        # both apps
 ```
 
-The seed creates two Companies: ალეკო at `/aleko-tbilisi` (Admin Phones +995 555 12 34 56 with alerts and +995 555 12 34 57 without) and სუფთა ქალაქი at `/supta-qalaqi` (+995 555 65 43 21). Outside production no SMS is sent: every message, including verification codes, is printed to the dev server console as `[sms] to …`. The admin sign-in form is pre-filled with ალეკო's first phone.
+The seed creates two Companies: ალეკო at `/aleko-tbilisi` (Admin Phones +995 555 12 34 56 with alerts and +995 555 12 34 57 without) and სუფთა ქალაქი at `/supta-qalaqi` (+995 555 65 43 21).
+
+It also creates test Companies at `/test-*`, one per booking situation (fully booked today, a Paused Day, Time Off, Suspended, and so on), listed in [`packages/db/src/scenarios.ts`](packages/db/src/scenarios.ts). Their days count from the day you seed, so run `pnpm db:seed` again to rebuild them for today; it prints each one's Admin Phone and situation. Their Manage Links are `/b/<slug>-<n>` for the n-th Booking.
+
+Outside production no SMS is sent: every message, including verification codes, is printed to the dev server console as `[sms] to …`. The admin sign-in form is pre-filled with ალეკო's first phone.
 
 ## Companies
 
