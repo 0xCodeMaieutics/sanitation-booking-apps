@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: ${{ matrix.check.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - { name: Lint, script: lint }
+          - { name: Format, script: format:check }
+          - { name: Typecheck, script: typecheck }
+          - { name: Test, script: test }
+          - { name: Turbo env, script: turbo-env:check }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm ${{ matrix.check.script }}
+
+  migrations:
+    name: Migrations up to date
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @sanitation/db exec drizzle-kit check
+
+      - name: Fail if schema has unmigrated changes
+        run: |
+          pnpm --filter @sanitation/db exec drizzle-kit generate < /dev/null
+          changes=$(git status --porcelain -- packages/db/migrations)
+          if [ -n "$changes" ]; then
+            echo "::error::packages/db/src/schema.ts differs from packages/db/migrations. Run 'pnpm db:generate' and commit the result."
+            echo "$changes"
+            git diff -- packages/db/migrations
+            exit 1
+          fi
+
+      - name: Apply migrations to an empty database
+        run: pnpm db:migrate
+
+  migrate:
+    name: Migrate database
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, migrations]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: db-migrate
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
