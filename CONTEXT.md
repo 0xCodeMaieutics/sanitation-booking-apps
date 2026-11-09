@@ -67,11 +67,11 @@ A Client's verified request to be called back about work the Admin must agree to
 _Avoid_: Custom booking, contact request, lead, inquiry, waitlist
 
 **Callback Request status**:
-A Callback Request is **Pending** (awaiting the Admin), **Accepted** (the Admin turned it into a Booking, choosing its Service, start time, Estimated Duration and Booking Price) or **Declined**. A phone number may hold only one Pending Callback Request with a desired start time.
+A Callback Request is **Pending** (awaiting the Admin), **Accepted** (the Admin turned it into a Booking, choosing its Service, start time, Estimated Duration and Booking Price) or **Declined**. A phone number may hold only one Pending Callback Request that pauses a day.
 _Avoid_: Open, handled, converted, rejected
 
 **Paused Day**:
-A day holding a Pending Callback Request's desired start time. It offers no Available Start Times, only the Callback Request form, until the Admin accepts or declines that request. There is no Company-wide pause.
+A day holding at least one Pending Callback Request: one whose desired start time falls on it, or one a Client left on it while it was paused. It offers no Available Start Times, only the Callback Request form, until the Admin has accepted or declined every one of them, so no Client can book the day ahead of someone already waiting for it. There is no Company-wide pause.
 _Avoid_: Paused app, blocked day, closed day
 
 ### Services

@@ -1,7 +1,7 @@
 import { formatPhone } from "@sanitation/core/phone"
 import { formatDate, formatDateTime, formatHour, toLocalHour } from "@sanitation/core/time"
 import { Badge } from "@sanitation/ui"
-import { ChevronRightIcon, PauseCircleIcon } from "lucide-react"
+import { ChevronRightIcon } from "lucide-react"
 import Link from "next/link"
 
 import { PageHeader } from "@/components/page-header"
@@ -20,12 +20,6 @@ function RequestCard({ request, underDay = false }: { request: AdminCallbackRequ
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={status.variant}>{status.label}</Badge>
-          {request.desiredStartsAt !== null ? (
-            <Badge variant="destructive">
-              <PauseCircleIcon aria-hidden />
-              დღე შეჩერებულია
-            </Badge>
-          ) : null}
         </div>
         <span className="line-clamp-2 font-semibold">{requestTitle(request)}</span>
         <span className="text-sm text-ink-soft">

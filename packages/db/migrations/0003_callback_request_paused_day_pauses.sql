@@ -1,0 +1,2 @@
+DROP INDEX "callback_request_one_pending_pause_per_phone";--> statement-breakpoint
+CREATE UNIQUE INDEX "callback_request_one_pending_pause_per_phone" ON "callback_request" USING btree ("company_id","phone") WHERE "callback_request"."status" = 'pending' and ("callback_request"."desired_starts_at" is not null or "callback_request"."paused_date" is not null);

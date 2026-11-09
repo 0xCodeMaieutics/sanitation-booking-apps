@@ -23,7 +23,7 @@ export type ScenarioBooking = At & {
 export type ScenarioCallbackRequest = {
   /** Set for a Custom Service request: while Pending it pauses that day. Unset for one left on a Paused Day. */
   desired?: At
-  /** The Paused Day it was left on, as a `day` offset. Unset for a Custom Service request. */
+  /** The Paused Day it was left on, as a `day` offset; while Pending it keeps that day paused. Unset for a Custom Service request. */
   pausedDay?: number
   description?: string
   /** Indexes of the Standard Services ticked on a Paused Day's form. */
@@ -119,7 +119,7 @@ export const scenarios: Scenario[] = [
     slug: "test-paused-today",
     name: "ტესტი: დღეს შეჩერებული",
     purpose:
-      "A Pending Custom Service request for 14:00 pauses today, and two Clients have left Paused Day requests.",
+      "A Pending Custom Service request for 14:00 pauses today, and two Clients have left Paused Day requests: today stays paused until all three are decided.",
     adminPhone: "+995555000005",
     bookings: [
       { day: 1, hour: 10, service: 1 },
