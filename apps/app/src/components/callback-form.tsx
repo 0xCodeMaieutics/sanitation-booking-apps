@@ -12,6 +12,7 @@ import type { ServiceSummary } from "@/trpc/types"
 
 import { BottomBar } from "./bottom-bar"
 import { CodeStep, useSendCode } from "./code-step"
+import { useCompany } from "./company"
 import { type Contact, ContactFields, emptyContact, validateContact } from "./contact-fields"
 
 const optionClassName =
@@ -26,6 +27,7 @@ export function CallbackForm({
   preselectedServiceId: string | null
 }) {
   const trpc = useTRPC()
+  const { slug } = useCompany()
   const [serviceIds, setServiceIds] = useState<string[]>(
     preselectedServiceId === null ? [] : [preselectedServiceId]
   )
@@ -50,7 +52,7 @@ export function CallbackForm({
         <h2 className="text-lg">მოთხოვნა მიღებულია</h2>
         <p className="text-ink-soft">მალე დაგიკავშირდებით.</p>
         <Button asChild variant="outline">
-          <Link href="/">მთავარზე დაბრუნება</Link>
+          <Link href={`/${slug}`}>მთავარზე დაბრუნება</Link>
         </Button>
       </div>
     )
@@ -66,6 +68,7 @@ export function CallbackForm({
         submitLabel="მოთხოვნის გაგზავნა"
         onSubmit={(code) =>
           request.mutate({
+            slug,
             phone: contact.phone,
             verificationId,
             code,
@@ -84,7 +87,7 @@ export function CallbackForm({
     const found = validateContact(contact, { name: false, address: false })
     setErrors(found)
     if (Object.keys(found).length > 0) return
-    sendCode.mutate({ phone: contact.phone }, { onSuccess: (r) => setVerificationId(r.verificationId) })
+    sendCode.mutate({ slug, phone: contact.phone }, { onSuccess: (r) => setVerificationId(r.verificationId) })
   }
 
   const toggle = (id: string) =>

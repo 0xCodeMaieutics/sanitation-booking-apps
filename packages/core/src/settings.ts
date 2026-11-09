@@ -6,19 +6,19 @@ export type Settings = { minNoticeHours: number; workingDays: IsoWeekday[] }
 
 const DEFAULTS: Settings = { minNoticeHours: 2, workingDays: [1, 2, 3, 4, 5, 6, 7] }
 
-export async function getSettings(db: DbOrTx): Promise<Settings> {
-  const [row] = await db.select().from(schema.settings).where(eq(schema.settings.id, 1))
+export async function getSettings(db: DbOrTx, input: { companyId: string }): Promise<Settings> {
+  const [row] = await db.select().from(schema.settings).where(eq(schema.settings.companyId, input.companyId))
   if (row === undefined) return DEFAULTS
   return { minNoticeHours: row.minNoticeHours, workingDays: row.workingDays as IsoWeekday[] }
 }
 
-export async function updateSettings(db: DbOrTx, input: Settings): Promise<void> {
+export async function updateSettings(db: DbOrTx, input: Settings & { companyId: string }): Promise<void> {
   const workingDays = [...new Set(input.workingDays)].toSorted((a, b) => a - b)
   await db
     .insert(schema.settings)
-    .values({ id: 1, minNoticeHours: input.minNoticeHours, workingDays })
+    .values({ companyId: input.companyId, minNoticeHours: input.minNoticeHours, workingDays })
     .onConflictDoUpdate({
-      target: schema.settings.id,
+      target: schema.settings.companyId,
       set: { minNoticeHours: input.minNoticeHours, workingDays },
     })
 }

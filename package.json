@@ -18,7 +18,8 @@
     "db:generate": "pnpm --filter @sanitation/db generate",
     "db:migrate": "pnpm --filter @sanitation/db migrate",
     "db:seed": "pnpm --filter @sanitation/db seed",
-    "db:reset": "pnpm --filter @sanitation/db reset"
+    "db:reset": "pnpm --filter @sanitation/db reset",
+    "company": "pnpm --filter @sanitation/core company"
   },
   "devDependencies": {
     "oxfmt": "^0.74.0",

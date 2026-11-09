@@ -17,6 +17,13 @@ const trpcCodeFor: Record<DomainErrorCode, TRPC_ERROR_CODE_KEY> = {
   OVERLAP: "CONFLICT",
   INVALID_STATE: "CONFLICT",
   CANCEL_TOO_LATE: "FORBIDDEN",
+  COMPANY_SUSPENDED: "FORBIDDEN",
+  PHONE_TAKEN: "CONFLICT",
+  LAST_ADMIN_PHONE: "CONFLICT",
+  LAST_ALERT_PHONE: "CONFLICT",
+  INVALID_SLUG: "BAD_REQUEST",
+  SLUG_TAKEN: "CONFLICT",
+  INVALID_NAME: "BAD_REQUEST",
 }
 
 export type DomainErrorData = { domainCode: DomainErrorCode | null; conflicts: Conflict[] }

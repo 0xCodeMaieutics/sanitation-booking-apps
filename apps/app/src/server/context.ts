@@ -13,7 +13,7 @@ function clientIp(headers: Headers): string | null {
 }
 
 export function createAppContext(headers: Headers): AppContext {
-  notify ??= createNotifier(createSmsSender(env.SMS_PROVIDER ?? ""), env.ADMIN_PHONE)
+  notify ??= createNotifier(createSmsSender(env.SMS_PROVIDER ?? ""))
   return {
     db: getDb(),
     messaging: { notify, appUrl: env.APP_URL },

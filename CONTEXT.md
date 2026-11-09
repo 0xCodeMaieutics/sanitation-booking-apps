@@ -1,14 +1,40 @@
 # Sanitation Booking
 
-A Georgian-language booking product for a single sanitation business: Clients book a visit when the worker is free, and leave a callback request when they are not.
+Cleanly, a Georgian-language booking product sold to sanitation companies: each Company's Clients book a visit when it is free, and leave a callback request when it is not.
 
 ## Language
+
+### Companies
+
+**Cleanly**:
+The product and the business selling it to sanitation Companies.
+_Avoid_: Platform, SaaS, the app
+
+**Company**:
+A sanitation business using Cleanly. It has one calendar: it does one job at a time, and its Services, Bookings, Callback Requests, Time Off and settings belong to it alone.
+_Avoid_: Tenant, business, organisation, account
+
+**Company Name**:
+The short Georgian name Clients know a Company by, shown in the Client app and at the start of its Client Messages.
+_Avoid_: Brand, title, display name
+
+**Suspended**:
+A Company Cleanly has switched off, for example for not paying; only Cleanly suspends or restores one. Its Booking Link says booking is unavailable and its Admins can make no new Bookings or accept Callback Requests, but existing Bookings stand: Clients may still cancel them and Admins may still see, complete or cancel them.
+_Avoid_: Disabled, inactive, deleted, archived
+
+**Booking Link**:
+A Company's public address in the Client app, ending in its slug (such as `aleko-tbilisi`), which the Company shares on its socials so Clients can book it. Only Cleanly sets or changes the slug; a former slug keeps leading to the Company and is never given to another.
+_Avoid_: Company URL, page, profile, storefront
 
 ### People
 
 **Admin**:
-The sanitation worker, who signs in to manage Services, Bookings and Time Off. There is one business, one worker's calendar and one Admin identity tied to one Admin phone; several people or devices may be signed in as the Admin at once, each with a code sent to that phone.
+Someone who signs in to manage one Company's Services, Bookings and Time Off. All Admins of a Company share its single calendar and have the same powers.
 _Avoid_: Worker account, staff, operator
+
+**Admin Phone**:
+A mobile number allowed to sign in as an Admin of one Company. A Company has one or more, and a number can be an Admin Phone of only one Company, so signing in with it always means that Company. Several people or devices may be signed in at once, each with a code sent to an Admin Phone. Any Admin may add or remove the Company's Admin Phones, except its last one; removing one signs out everyone who signed in with it.
+_Avoid_: Admin number, login phone
 
 **Client**:
 A person who wants sanitation work done and uses the public app to book it or to ask for a call back. A Client has no account and is identified by their verified Georgian mobile number.
@@ -45,7 +71,7 @@ A Callback Request is **Pending** (awaiting the Admin), **Accepted** (the Admin 
 _Avoid_: Open, handled, converted, rejected
 
 **Paused Day**:
-A day holding a Pending Callback Request's desired start time. It offers no Available Start Times, only the Callback Request form, until the Admin accepts or declines that request. There is no business-wide pause.
+A day holding a Pending Callback Request's desired start time. It offers no Available Start Times, only the Callback Request form, until the Admin accepts or declines that request. There is no Company-wide pause.
 _Avoid_: Paused app, blocked day, closed day
 
 ### Services
@@ -73,11 +99,11 @@ _Avoid_: Estimate, ETA
 ### Messages
 
 **Client Message**:
-A Georgian SMS sent to a Client: their Verification Code, the confirmation of a new Booking (with its Manage Link), notice that the Admin cancelled it, or notice that their Callback Request was declined. There are no reminders.
+A Georgian SMS sent to a Client: their Verification Code, the confirmation of a new Booking (with its Manage Link), notice that the Admin cancelled it, or notice that their Callback Request was declined. Every Client Message comes from Cleanly; all but the Verification Code begin with the Company Name. There are no reminders.
 _Avoid_: Notification, text
 
 **Admin Alert**:
-A Georgian SMS sent to the Admin's phone straight away, at any hour, when a Client books, cancels, or leaves a Callback Request (saying whether it paused a day).
+A Georgian SMS sent straight away, at any hour, to each of the Company's Admin Phones that has alerts on, when a Client books, cancels, or leaves a Callback Request (saying whether it paused a day). Alerts are on for a new Admin Phone, and at least one of a Company's Admin Phones always has them on.
 _Avoid_: Notification, admin SMS
 
 ### Prices
@@ -93,11 +119,11 @@ _Avoid_: Estimated cost, final price, amount charged, actual price
 ### Scheduling
 
 **Working Hours**:
-The hourly start times the business offers, in Tbilisi time: 09:00 to 18:00 on the Working Days.
+The hourly start times every Company offers, in Tbilisi time: 09:00 to 18:00 on its Working Days. Companies cannot change them.
 _Avoid_: Schedule, shifts, opening hours
 
 **Working Days**:
-The weekdays the business works, chosen by the Admin; every day of the week by default.
+The weekdays a Company works, chosen by its Admins; every day of the week by default.
 _Avoid_: Open days, business days
 
 **Time Off** (არასამუშაო დრო):

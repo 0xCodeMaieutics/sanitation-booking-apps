@@ -10,6 +10,7 @@ import { type FormEvent, useState } from "react"
 import { BottomBar } from "@/components/bottom-bar"
 import { CallbackForm } from "@/components/callback-form"
 import { CodeStep, useSendCode } from "@/components/code-step"
+import { useCompany } from "@/components/company"
 import { type Contact, ContactFields, emptyContact, validateContact } from "@/components/contact-fields"
 import { DayStrip } from "@/components/day-strip"
 import { StepHeader } from "@/components/step-header"
@@ -33,6 +34,7 @@ export function BookingFlow({
 }) {
   const trpc = useTRPC()
   const router = useRouter()
+  const { slug } = useCompany()
   const [step, setStep] = useState<Step>("time")
   const [date, setDate] = useState<LocalDate>(() => firstUsefulDate(days))
   const [time, setTime] = useState<Date | null>(null)
@@ -70,7 +72,7 @@ export function BookingFlow({
           submitError={book.error}
           submitLabel="დაჯავშნა"
           onSubmit={(code) =>
-            book.mutate({ ...contact, verificationId, code, serviceId: service.id, startsAt: time })
+            book.mutate({ ...contact, slug, verificationId, code, serviceId: service.id, startsAt: time })
           }
         />
       </div>
@@ -84,7 +86,7 @@ export function BookingFlow({
       setErrors(found)
       if (Object.keys(found).length > 0) return
       sendCode.mutate(
-        { phone: contact.phone },
+        { slug, phone: contact.phone },
         {
           onSuccess: (r) => {
             setVerificationId(r.verificationId)
@@ -119,7 +121,7 @@ export function BookingFlow({
 
   return (
     <div className="flex flex-col gap-5">
-      <StepHeader title={service.name} step={1} of={3} backHref="/" />
+      <StepHeader title={service.name} step={1} of={3} backHref={`/${slug}`} />
       <p className="-mt-3 flex items-center gap-3 text-sm text-ink-soft">
         <span className="flex items-center gap-1">
           <ClockIcon aria-hidden className="size-3.5" />

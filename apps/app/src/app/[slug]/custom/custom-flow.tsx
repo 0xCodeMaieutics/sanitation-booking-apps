@@ -11,6 +11,7 @@ import { type FormEvent, useState } from "react"
 import { BottomBar } from "@/components/bottom-bar"
 import { CallbackForm } from "@/components/callback-form"
 import { CodeStep, useSendCode } from "@/components/code-step"
+import { useCompany } from "@/components/company"
 import { type Contact, ContactFields, emptyContact, validateContact } from "@/components/contact-fields"
 import { DayStrip } from "@/components/day-strip"
 import { StepHeader } from "@/components/step-header"
@@ -31,6 +32,7 @@ const emptyDescribe =
 export function CustomFlow({ services, days }: { services: ServiceSummary[]; days: Availability }) {
   const trpc = useTRPC()
   const router = useRouter()
+  const { slug } = useCompany()
   const [step, setStep] = useState<Step>("describe")
   const [description, setDescription] = useState(emptyDescribe.description)
   const [address, setAddress] = useState(emptyDescribe.address)
@@ -75,7 +77,7 @@ export function CustomFlow({ services, days }: { services: ServiceSummary[]; day
           დაგიკავშირდებით სამუშაოს, დროისა და ფასის შესათანხმებლად. დადასტურების შემდეგ მიიღებთ SMS-ს.
         </p>
         <Button asChild variant="outline">
-          <Link href="/">მთავარზე დაბრუნება</Link>
+          <Link href={`/${slug}`}>მთავარზე დაბრუნება</Link>
         </Button>
       </div>
     )
@@ -93,6 +95,7 @@ export function CustomFlow({ services, days }: { services: ServiceSummary[]; day
           submitLabel="მოთხოვნის გაგზავნა"
           onSubmit={(code) =>
             request.mutate({
+              slug,
               phone: contact.phone,
               verificationId,
               code,
@@ -115,7 +118,7 @@ export function CustomFlow({ services, days }: { services: ServiceSummary[]; day
       setErrors(found)
       if (Object.keys(found).length > 0) return
       sendCode.mutate(
-        { phone: contact.phone },
+        { slug, phone: contact.phone },
         {
           onSuccess: (r) => {
             setVerificationId(r.verificationId)
@@ -225,7 +228,7 @@ export function CustomFlow({ services, days }: { services: ServiceSummary[]; day
 
   return (
     <form onSubmit={submitDescribe} className="flex flex-col gap-5" noValidate>
-      <StepHeader title="სხვა სამუშაო" step={1} of={4} backHref="/" />
+      <StepHeader title="სხვა სამუშაო" step={1} of={4} backHref={`/${slug}`} />
       <div className="flex items-start gap-3 rounded-2xl bg-mist p-4 text-sm">
         <InfoIcon aria-hidden className="mt-0.5 size-5 shrink-0 text-brand" />
         <p>აღწერეთ სამუშაო და აირჩიეთ სასურველი დრო. დაგიკავშირდებით, შეგითანხმებთ ხანგრძლივობას და ფასს.</p>

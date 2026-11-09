@@ -6,7 +6,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
 
-import { findOrNull, serverCaller } from "@/server/caller"
+import { findBooking } from "@/server/caller"
 
 import { CancelBooking } from "./cancel-booking"
 
@@ -21,7 +21,7 @@ const STATUS = {
 export default async function ManageBookingPage({ params, searchParams }: PageProps<"/b/[token]">) {
   const { token } = await params
   const { new: isNew } = await searchParams
-  const booking = await findOrNull((await serverCaller()).booking({ token }))
+  const booking = await findBooking(token)
   if (booking === null) notFound()
   const status = STATUS[booking.status]
 

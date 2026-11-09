@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query"
 import { MessageSquareIcon } from "lucide-react"
 import { type FormEvent, useEffect, useState } from "react"
 
+import { useCompany } from "@/components/company"
 import { errorMessage } from "@/lib/errors"
 import { useTRPC } from "@/trpc/client"
 
@@ -46,6 +47,7 @@ export function CodeStep({
   submitError: unknown
   submitLabel: string
 }) {
+  const { slug } = useCompany()
   const [code, setCode] = useState("")
   const [secondsLeft, restart] = useCountdown()
   const sendCode = useSendCode()
@@ -99,7 +101,7 @@ export function CodeStep({
         disabled={secondsLeft > 0 || sendCode.isPending}
         onClick={() =>
           sendCode.mutate(
-            { phone },
+            { slug, phone },
             {
               onSuccess: (r) => {
                 setCode("")
