@@ -109,7 +109,7 @@ _Avoid_: Notification, admin SMS
 ### Prices
 
 **Service Price**:
-The normal price of a Standard Service in lari, shown to Clients when they choose a Service.
+The starting price of a Standard Service in lari: the least the work costs, which may grow once the job is seen. Clients see it as a starting price ("80 ₾-დან") when they choose a Service.
 _Avoid_: Base price, list price, cost
 
 **Booking Price**:

@@ -1,5 +1,5 @@
 export function formatPrice(priceGel: number): string {
-  return `${priceGel} ₾`
+  return `${priceGel} ₾-დან`
 }
 
 export function formatDuration(hours: number): string {
