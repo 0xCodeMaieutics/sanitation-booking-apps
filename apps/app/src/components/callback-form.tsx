@@ -95,8 +95,11 @@ export function CallbackForm({
       <div className="flex items-start gap-3 rounded-2xl bg-warning-soft p-4 text-ink">
         <PauseCircleIcon aria-hidden className="mt-0.5 size-5 shrink-0 text-warning" />
         <div className="flex flex-col gap-1">
-          <p className="font-semibold">ეს დღე დროებით შეჩერებულია</p>
-          <p className="text-sm">დატოვეთ ნომერი და დაგიკავშირდებით, ან აირჩიეთ სხვა დღე.</p>
+          <p className="font-semibold">ამ დღეს შეიძლება ვერ მოვასწროთ</p>
+          <p className="text-sm">
+            თუ ამ დღეს აუცილებლად გჭირდებათ ჩვენი მომსახურება, შეავსეთ ფორმა და დაგიკავშირდებით. ან აირჩიეთ
+            სხვა დღე.
+          </p>
         </div>
       </div>
 
