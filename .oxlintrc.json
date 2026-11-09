@@ -1,0 +1,76 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true
+  },
+  "plugins": ["typescript", "unicorn", "oxc", "import", "react", "nextjs", "jsx-a11y", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "oxc/no-map-spread": "off",
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css", "server-only"] }],
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/strict-boolean-expressions": [
+      "error",
+      {
+        "allowString": true,
+        "allowNumber": true,
+        "allowNullableObject": false,
+        "allowNullableBoolean": true,
+        "allowNullableString": false,
+        "allowNullableNumber": true,
+        "allowNullableEnum": true,
+        "allowAny": true
+      }
+    ],
+    "typescript/await-thenable": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-floating-promises": "off",
+    "typescript/no-redundant-type-constituents": "off",
+    "typescript/no-useless-default-assignment": "off",
+    "typescript/restrict-template-expressions": "off",
+    "no-unused-vars": ["error", { "ignoreRestSiblings": true }]
+  },
+  "overrides": [
+    {
+      "files": ["apps/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@tanstack/react-query",
+                "importNames": [
+                  "useQuery",
+                  "useQueries",
+                  "useSuspenseQuery",
+                  "useSuspenseQueries",
+                  "useInfiniteQuery",
+                  "useSuspenseInfiniteQuery"
+                ],
+                "message": "Read data in a server component and pass it down as props; tRPC is for mutations only."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "packages/db/migrations/**",
+    "packages/ui/src/components/**",
+    "**/.next/**",
+    "**/next-env.d.ts"
+  ]
+}

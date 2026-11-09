@@ -1,0 +1,83 @@
+/*
+ * Shared Tailwind configuration for the Client app and the admin app.
+ * Flat, trust-first palette: navy/blue for structure, orange only for the main call to action.
+ * Apps set --font-noto-sans with next/font (Noto Sans Georgian).
+ */
+@import "tailwindcss";
+
+@source "./";
+
+@theme {
+  --color-canvas: #f4f7fb;
+  --color-paper: #ffffff;
+  --color-ink: #0f1e3d;
+  --color-ink-soft: #475569;
+  --color-mist: #e6edf7;
+  --color-brand: #1e40af;
+  --color-brand-soft: #3b82f6;
+  --color-cta: #c2410c;
+  --color-cta-foreground: #ffffff;
+  --color-danger: #b91c1c;
+  --color-success: #15803d;
+  --color-success-soft: #dcfce7;
+  --color-warning: #b45309;
+  --color-warning-soft: #fef3c7;
+
+  --font-sans: var(--font-noto-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* shadcn/ui's semantic tokens, mapped onto the palette above. */
+@theme inline {
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-paper);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-paper);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-paper);
+  --color-secondary: var(--color-mist);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-mist);
+  --color-muted-foreground: var(--color-ink-soft);
+  --color-accent: var(--color-mist);
+  --color-accent-foreground: var(--color-ink);
+  --color-destructive: var(--color-danger);
+  --color-border: color-mix(in oklab, var(--color-ink) 12%, transparent);
+  --color-input: color-mix(in oklab, var(--color-ink) 22%, transparent);
+  --color-ring: var(--color-brand-soft);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply leading-tight font-semibold text-balance;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

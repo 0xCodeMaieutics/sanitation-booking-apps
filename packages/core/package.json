@@ -1,0 +1,22 @@
+{
+  "name": "@sanitation/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./time": "./src/time.ts",
+    "./phone": "./src/phone.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@sanitation/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "vitest": "^4.1.6"
+  }
+}
