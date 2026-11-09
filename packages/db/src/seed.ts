@@ -1,6 +1,11 @@
-import { createHash, randomBytes } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 
 import { createDb, eq, schema } from "./index"
+import { SCENARIO_SERVICES, type Scenario, type ScenarioBooking, scenarios } from "./scenarios"
+
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to seed with NODE_ENV=production")
+}
 
 const db = createDb()
 
@@ -274,6 +279,163 @@ if (aleko.created) {
   )
   console.log(`Seeded ${bookings.length} past bookings.`)
 }
+
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex")
+
+const scenarioClients = [
+  { clientName: "ნინო ბერიძე", phone: "+995599112233", address: "საბურთალო, ვაჟა-ფშაველას 23" },
+  { clientName: "დავით კაპანაძე", phone: "+995577445566", address: "ვაკე, აბაშიძის 8" },
+  { clientName: "თამარ ლომიძე", phone: "+995555778899", address: "დიდუბე, წერეთლის 115" },
+  { clientName: "გიორგი მაისურაძე", phone: "+995591223344", address: "წყნეთი, მთავარი ქუჩა 4" },
+  { clientName: "ეკა გელაშვილი", phone: "+995595667788", address: "გლდანი, ხიზანიშვილის 41" },
+]
+
+function scenarioClient(n: number) {
+  const client = scenarioClients[n % scenarioClients.length]
+  if (client === undefined) throw new Error("No scenario clients")
+  return client
+}
+
+/** Deletes the scenario's Company if an earlier seed made it, then creates it for today. */
+async function seedScenario(s: Scenario): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [old] = await tx
+      .select({ id: schema.company.id })
+      .from(schema.company)
+      .where(eq(schema.company.slug, s.slug))
+    if (old !== undefined) {
+      await tx.delete(schema.booking).where(eq(schema.booking.companyId, old.id))
+      await tx.delete(schema.callbackRequest).where(eq(schema.callbackRequest.companyId, old.id))
+      await tx.delete(schema.timeOff).where(eq(schema.timeOff.companyId, old.id))
+      await tx.delete(schema.service).where(eq(schema.service.companyId, old.id))
+      await tx.delete(schema.settings).where(eq(schema.settings.companyId, old.id))
+      await tx.delete(schema.adminPhone).where(eq(schema.adminPhone.companyId, old.id))
+      await tx.delete(schema.companySlug).where(eq(schema.companySlug.companyId, old.id))
+      await tx.delete(schema.company).where(eq(schema.company.id, old.id))
+    }
+
+    const now = new Date()
+    const [company] = await tx
+      .insert(schema.company)
+      .values({ slug: s.slug, name: s.name, suspendedAt: s.suspended === true ? now : null })
+      .returning()
+    if (company === undefined) throw new Error(`Failed to seed ${s.slug}`)
+    const companyId = company.id
+    await tx
+      .insert(schema.companySlug)
+      .values([s.slug, ...(s.formerSlugs ?? [])].map((slug) => ({ slug, companyId })))
+    await tx.insert(schema.adminPhone).values({ companyId, phone: s.adminPhone })
+    await tx
+      .insert(schema.settings)
+      .values({ companyId, minNoticeHours: s.minNoticeHours, workingDays: s.workingDays })
+    const services = await tx
+      .insert(schema.service)
+      .values(
+        (s.services ?? SCENARIO_SERVICES).map(({ archived, ...svc }, i) => ({
+          ...svc,
+          companyId,
+          sortOrder: i + 1,
+          archivedAt: archived === true ? now : null,
+        }))
+      )
+      .returning()
+    const serviceAt = (i: number) => {
+      const svc = services[i]
+      if (svc === undefined) throw new Error(`${s.slug} has no Service ${i}`)
+      return svc
+    }
+
+    type Job = Pick<ScenarioBooking, "service" | "createdBy"> & {
+      startsAt: Date
+      priceGel?: number
+      callbackRequestId?: string
+    }
+    /** `token` makes the Manage Link `/b/<token>`. */
+    const bookingRow = (job: Job, n: number, token: string): typeof schema.booking.$inferInsert => {
+      const row = {
+        ...scenarioClient(n),
+        companyId,
+        startsAt: job.startsAt,
+        createdBy: job.createdBy ?? "client",
+        callbackRequestId: job.callbackRequestId ?? null,
+        manageTokenHash: sha256(token),
+        createdAt: addHours(job.startsAt, -48),
+      }
+      if (typeof job.service !== "number") {
+        const { custom, durationHours } = job.service
+        return {
+          ...row,
+          serviceId: null,
+          customService: custom,
+          durationHours,
+          priceGel: job.priceGel ?? null,
+        }
+      }
+      const svc = serviceAt(job.service)
+      return {
+        ...row,
+        serviceId: svc.id,
+        customService: null,
+        durationHours: svc.durationHours,
+        priceGel: svc.priceGel,
+      }
+    }
+    const bookings = (s.bookings ?? []).map((b, i) =>
+      bookingRow({ ...b, startsAt: tbilisi(-b.day, b.hour) }, i, `${s.slug}-${i + 1}`)
+    )
+
+    const requests = (s.callbackRequests ?? []).map((r, i) => ({
+      ...r,
+      id: randomUUID(),
+      client: scenarioClient(i + 1),
+      desiredStartsAt: r.desired === undefined ? null : tbilisi(-r.desired.day, r.desired.hour),
+    }))
+    if (requests.length > 0) {
+      await tx.insert(schema.callbackRequest).values(
+        requests.map((r) => ({
+          id: r.id,
+          companyId,
+          ...r.client,
+          address: r.desired === undefined ? "" : r.client.address,
+          description: r.description ?? "",
+          note: r.note ?? "",
+          desiredStartsAt: r.desiredStartsAt,
+          status: typeof r.status === "object" ? ("accepted" as const) : (r.status ?? "pending"),
+          decidedAt: r.status === undefined || r.status === "pending" ? null : now,
+          createdAt: addHours(now, -3),
+        }))
+      )
+      const ticked = requests.flatMap((r) =>
+        (r.services ?? []).map((i) => ({ callbackRequestId: r.id, serviceId: serviceAt(i).id }))
+      )
+      if (ticked.length > 0) await tx.insert(schema.callbackRequestService).values(ticked)
+      for (const [i, r] of requests.entries()) {
+        if (typeof r.status !== "object" || r.desiredStartsAt === null) continue
+        const job: Job = {
+          service: { custom: r.description ?? "", durationHours: r.status.acceptedHours },
+          createdBy: "admin",
+          startsAt: r.desiredStartsAt,
+          priceGel: r.status.priceGel,
+          callbackRequestId: r.id,
+        }
+        bookings.push(bookingRow(job, i + 1, `${s.slug}-r${i + 1}`))
+      }
+    }
+    if (bookings.length > 0) await tx.insert(schema.booking).values(bookings)
+
+    const offs = (s.timeOff ?? []).map((o) => ({
+      companyId,
+      startsAt: tbilisi(-o.day, o.fromHour ?? 0),
+      endsAt: tbilisi(-o.day, o.toHour ?? 24),
+      note: o.note ?? "",
+    }))
+    if (offs.length > 0) await tx.insert(schema.timeOff).values(offs)
+  })
+}
+
+await Promise.all(scenarios.map(seedScenario))
+console.log("Seeded test Companies (Admin Phone, Booking Link, situation):")
+for (const s of scenarios) console.log(`  ${s.adminPhone}  /${s.slug}  ${s.purpose}`)
 
 await db.$client.end()
 console.log("Seeded.")
