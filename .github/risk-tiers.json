@@ -1,0 +1,96 @@
+{
+  "rules": [
+    {
+      "tier": "high",
+      "reason": "database schema, migrated to production on merge",
+      "patterns": [
+        "packages/db/src/schema.ts",
+        "packages/db/migrations/**",
+        "packages/db/drizzle.config.ts",
+        "packages/db/src/migrate.ts"
+      ]
+    },
+    {
+      "tier": "high",
+      "reason": "CI, holds production secrets and decides Risk Tiers",
+      "patterns": [".github/**", "scripts/risk-tier.mts"]
+    },
+    {
+      "tier": "high",
+      "reason": "Company operations, run by hand against the production database",
+      "patterns": ["packages/core/scripts/**"]
+    },
+    {
+      "tier": "high",
+      "reason": "authentication, sessions and Company scoping",
+      "patterns": [
+        "packages/core/src/admin-auth.ts",
+        "packages/core/src/verification.ts",
+        "packages/core/src/tokens.ts",
+        "packages/api/src/*/trpc.ts",
+        "apps/*/src/proxy.ts",
+        "apps/*/src/server/context.ts"
+      ]
+    },
+    {
+      "tier": "high",
+      "reason": "SMS delivery, sends real paid messages to Clients and Admins",
+      "patterns": ["packages/core/src/sms.ts", "packages/core/src/notifier.ts"]
+    },
+    {
+      "tier": "high",
+      "reason": "production configuration",
+      "patterns": ["apps/*/src/env.ts", "apps/*/vercel.json", "apps/*/next.config.ts", "turbo.json"]
+    },
+    {
+      "tier": "high",
+      "reason": "dependencies shared by every app",
+      "patterns": ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
+    },
+    {
+      "tier": "high",
+      "reason": "AI Context",
+      "patterns": ["**/*.md", ".agents/**"]
+    },
+    {
+      "tier": "low",
+      "reason": "styles",
+      "patterns": ["**/*.css"]
+    },
+    {
+      "tier": "low",
+      "reason": "static assets",
+      "patterns": ["assets/**", "apps/*/src/app/*.{png,ico,svg}"]
+    },
+    {
+      "tier": "low",
+      "reason": "tests, never reach production",
+      "patterns": ["**/*.test.ts"]
+    },
+    {
+      "tier": "low",
+      "reason": "dev seed content, refuses to run in production",
+      "patterns": ["packages/db/src/seed.ts", "packages/db/src/scenarios.ts"]
+    },
+    {
+      "tier": "low",
+      "reason": "local development setup",
+      "patterns": ["docker-compose.yml", "Makefile", ".gitignore"]
+    },
+    {
+      "tier": "low",
+      "reason": "env template without real values",
+      "patterns": [".env.example"]
+    },
+    {
+      "tier": "medium",
+      "reason": "app and package code",
+      "patterns": ["apps/*/**", "packages/*/**"]
+    },
+    {
+      "tier": "medium",
+      "reason": "shared tooling config",
+      "patterns": ["tsconfig.json", "tsconfig.base.json", ".oxlintrc.json", ".oxfmtrc.json", "scripts/**"]
+    }
+  ]
+}

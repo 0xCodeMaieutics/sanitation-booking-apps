@@ -141,3 +141,26 @@ _Avoid_: Horizon, calendar range
 **Available Start Time**:
 A start time a Client can pick for the Service they chose: inside Working Hours and the Booking Window, at least Minimum Notice from now, not on a Paused Day, and with the chosen Service's whole Duration clear of Time Off and of time occupied by Booked Bookings. For a Callback Request's desired start time, only the start hour itself must be clear.
 _Avoid_: Slot, free time, opening
+
+## Code Review
+
+**Risk Tier**:
+How much review attention a pull request needs, from Low through Medium to High. A higher tier means a closer review. Each changed file has a tier based on where it lives, and the pull request takes the highest tier among its files. An Unclassified File counts as Medium.
+_Avoid_: Severity, priority, risk level
+
+**Unclassified File**:
+A changed file that no Risk Tier rule covers yet. It is listed separately so someone can add a rule for it, and it counts as Medium until they do. It is not a fourth Risk Tier.
+_Avoid_: Unknown tier
+
+**Low Risk Tier**:
+A change a reviewer may skim and approve once CI passes, such as styling, tests or seed data.
+
+**Medium Risk Tier**:
+A change that needs a normal review: reading the diff and checking the behaviour in a preview.
+
+**High Risk Tier**:
+A change that needs a careful review: reading every line, thinking through what happens in production and how to roll it back, and testing it by hand. The author should not merge it without another person's approval. This includes AI Context, because it shapes the code agents write.
+
+**AI Context**:
+Any file an AI agent reads as instructions or background, such as agent skills, this glossary, ADRs and other docs written for developers.
+_Avoid_: Prompts, docs

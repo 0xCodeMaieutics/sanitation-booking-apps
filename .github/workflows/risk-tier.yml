@@ -1,0 +1,57 @@
+name: Risk Tier
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: risk-tier-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  risk-tier:
+    name: Risk Tier
+    # Dependabot and fork pull requests get a read-only token, so the comment and label would fail.
+    if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Classify changed files
+        id: classify
+        run: >-
+          node scripts/risk-tier.mts "origin/${{ github.base_ref }}" --markdown risk-tier.md
+          --pr-url "${{ github.event.pull_request.html_url }}"
+
+      - name: Post or update the comment
+        run: |
+          comment_id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- risk-tier -->")) | .id' | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -F body=@risk-tier.md
+          else
+            gh pr comment "$PR" --body-file risk-tier.md
+          fi
+
+      - name: Set the label
+        env:
+          TIER: ${{ steps.classify.outputs.tier }}
+        run: |
+          gh label create "risk: high" --color B60205 --description "High Risk Tier" --force
+          gh label create "risk: medium" --color FBCA04 --description "Medium Risk Tier" --force
+          gh label create "risk: low" --color 0E8A16 --description "Low Risk Tier" --force
+          remove=$(printf 'risk: %s\n' high medium low | grep -vx "risk: $TIER" | paste -sd, -)
+          gh pr edit "$PR" --add-label "risk: $TIER" --remove-label "$remove"
