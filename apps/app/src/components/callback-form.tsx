@@ -24,18 +24,21 @@ export function CallbackForm({
   date,
   services,
   preselectedServiceId,
+  preselectedOther = "",
 }: {
   date: LocalDate
   services: ServiceSummary[]
   preselectedServiceId: string | null
+  /** A Custom Service the Client already described, ticked as "other" with this description. */
+  preselectedOther?: string
 }) {
   const trpc = useTRPC()
   const { slug } = useCompany()
   const [serviceIds, setServiceIds] = useState<string[]>(
     preselectedServiceId === null ? [] : [preselectedServiceId]
   )
-  const [otherSelected, setOtherSelected] = useState(false)
-  const [other, setOther] = useState("")
+  const [otherSelected, setOtherSelected] = useState(preselectedOther !== "")
+  const [other, setOther] = useState(preselectedOther)
   const [contact, setContact] = useState<Contact>(emptyContact)
   const [errors, setErrors] = useState<ReturnType<typeof validateContact>>({})
   const [verificationId, setVerificationId] = useState<string | null>(null)
