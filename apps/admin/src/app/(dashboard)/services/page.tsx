@@ -13,7 +13,7 @@ export default async function ServicesPage() {
     <>
       <PageHeader
         title="სერვისები"
-        description="ხანგრძლივობა განსაზღვრავს, რამდენ ხანს იკავებს ჯავშანი. ფასს კლიენტი ხედავს."
+        description="ხანგრძლივობა განსაზღვრავს, რამდენ ხანს იკავებს ჯავშანი. ფასს კლიენტი ხედავს, როგორც საწყისს (მაგ. „80 ₾-დან“)."
         action={<ServiceEditor service={null} />}
       />
       <div className="flex flex-col gap-2">

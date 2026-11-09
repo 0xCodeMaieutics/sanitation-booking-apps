@@ -150,7 +150,7 @@ export function ServiceEditor({ service }: { service: AdminService | null }) {
                 </NativeSelect>
               </Field>
               <Field>
-                <FieldLabel htmlFor={`price-${service?.id ?? "new"}`}>ფასი (₾)</FieldLabel>
+                <FieldLabel htmlFor={`price-${service?.id ?? "new"}`}>საწყისი ფასი (₾)</FieldLabel>
                 <Input
                   id={`price-${service?.id ?? "new"}`}
                   inputMode="numeric"
