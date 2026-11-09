@@ -54,7 +54,7 @@ function PhoneRow({ phone, isCurrent }: { phone: AdminPhone; isCurrent: boolean 
 
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-medium whitespace-nowrap tabular-nums">{formatPhone(phone.phone)}</span>
         {isCurrent ? <Badge variant="muted">თქვენ</Badge> : null}
         <div className="ml-auto flex items-center gap-1">
