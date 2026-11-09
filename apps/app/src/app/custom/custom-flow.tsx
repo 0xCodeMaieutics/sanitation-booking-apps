@@ -22,13 +22,18 @@ import type { Availability, ServiceSummary } from "@/trpc/types"
 
 type Step = "describe" | "time" | "details" | "code" | "done"
 
+const emptyDescribe =
+  process.env.NODE_ENV === "development"
+    ? { description: "სარდაფში წყალი დგას, საჭიროა ამოტუმბვა", address: "თბილისი, ჭავჭავაძის გამზ. 1" }
+    : { description: "", address: "" }
+
 /** A Client asking for a Custom Service: the Admin calls back and turns it into a Booking. */
 export function CustomFlow({ services, days }: { services: ServiceSummary[]; days: Availability }) {
   const trpc = useTRPC()
   const router = useRouter()
   const [step, setStep] = useState<Step>("describe")
-  const [description, setDescription] = useState("")
-  const [address, setAddress] = useState("")
+  const [description, setDescription] = useState(emptyDescribe.description)
+  const [address, setAddress] = useState(emptyDescribe.address)
   const [describeErrors, setDescribeErrors] = useState<{ description?: string; address?: string }>({})
   const [date, setDate] = useState<LocalDate>(() => firstUsefulDate(days))
   const [time, setTime] = useState<Date | null>(null)
