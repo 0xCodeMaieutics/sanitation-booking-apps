@@ -11,7 +11,7 @@ import {
 } from "@sanitation/db"
 
 import { alertAdmins } from "./admin-phones"
-import { isAvailableStartTime } from "./availability"
+import { dayStatus, isAvailableStartTime, isInBookingWindow } from "./availability"
 import type { Messaging } from "./bookings"
 import { loadCalendar, lockCalendar } from "./calendar"
 import { getActiveCompany, getCompany } from "./companies"
@@ -88,7 +88,10 @@ export async function createCustomRequest(
   return { callbackRequestId }
 }
 
-/** A Client on a Paused Day asking to be called back about the Services they want. */
+/**
+ * A Client on a Paused Day asking to be called back about the Services they want. While Pending,
+ * it keeps that day paused, so nobody books it before the Admin has reviewed the request.
+ */
 export async function createPausedDayRequest(
   db: Db,
   m: Messaging,
@@ -107,7 +110,19 @@ export async function createPausedDayRequest(
   await checkVerificationCode(db, { ...input, phone, purpose: "client" })
 
   const callbackRequestId = await db.transaction(async (tx) => {
+    await lockCalendar(tx, input.companyId)
     await getActiveCompany(tx, input.companyId)
+    const calendar = await loadCalendar(tx, {
+      companyId: input.companyId,
+      from: input.date,
+      to: input.date,
+      now: input.now,
+    })
+    // The day may have reopened while the Client filled in the form; their request still pauses it.
+    if (!isInBookingWindow(input.date, input.now) || dayStatus(calendar, input.date) === "closed") {
+      throw new DomainError("INVALID_STATE")
+    }
+
     await consumeVerification(tx, { ...input, phone, purpose: "client" })
     const [row] = await tx
       .insert(callbackRequest)
@@ -120,6 +135,12 @@ export async function createPausedDayRequest(
         pausedDate: input.date,
       })
       .returning({ id: callbackRequest.id })
+      .catch((error: unknown) => {
+        if (isUniqueViolation(error, "callback_request_one_pending_pause_per_phone")) {
+          throw new DomainError("PENDING_REQUEST_EXISTS")
+        }
+        throw error
+      })
     if (row === undefined) throw new Error("Failed to create callback request")
     const serviceIds = [...new Set(input.serviceIds)]
     if (serviceIds.length > 0) {
@@ -193,13 +214,13 @@ async function withServices<T extends { id: string }>(db: DbOrTx, requests: T[])
   }))
 }
 
-/** Pending Callback Requests, soonest desired time first, then the rest oldest first. */
+/** Pending Callback Requests, oldest first, so each Paused Day's queue reads in the order Clients joined it. */
 export async function listPendingCallbackRequests(db: DbOrTx, input: { companyId: string }) {
   const pending = await db
     .select()
     .from(callbackRequest)
     .where(and(eq(callbackRequest.companyId, input.companyId), eq(callbackRequest.status, "pending")))
-    .orderBy(sql`${callbackRequest.desiredStartsAt} asc nulls last`, callbackRequest.createdAt)
+    .orderBy(callbackRequest.createdAt)
   return withServices(db, pending)
 }
 

@@ -1,4 +1,4 @@
-import { type DbOrTx, and, eq, gt, gte, isNotNull, lt, schema, sql } from "@sanitation/db"
+import { type DbOrTx, and, eq, gt, gte, lt, lte, or, schema, sql } from "@sanitation/db"
 
 import type { Calendar, Occupied } from "./availability"
 import { getSettings } from "./settings"
@@ -74,19 +74,23 @@ export async function loadCalendar(
   const settings = await getSettings(db, input)
   const occupied = await loadOccupied(db, input.companyId, start, end)
   const pending = await db
-    .select({ desiredStartsAt: callbackRequest.desiredStartsAt })
+    .select({ desiredStartsAt: callbackRequest.desiredStartsAt, pausedDate: callbackRequest.pausedDate })
     .from(callbackRequest)
     .where(
       and(
         eq(callbackRequest.companyId, input.companyId),
         eq(callbackRequest.status, "pending"),
-        isNotNull(callbackRequest.desiredStartsAt),
-        gte(callbackRequest.desiredStartsAt, start),
-        lt(callbackRequest.desiredStartsAt, end)
+        or(
+          and(gte(callbackRequest.desiredStartsAt, start), lt(callbackRequest.desiredStartsAt, end)),
+          and(gte(callbackRequest.pausedDate, input.from), lte(callbackRequest.pausedDate, input.to))
+        )
       )
     )
   const pausedDates = new Set(
-    pending.flatMap((p) => (p.desiredStartsAt === null ? [] : [toLocalDate(p.desiredStartsAt)]))
+    pending.flatMap((p) => {
+      if (p.desiredStartsAt !== null) return [toLocalDate(p.desiredStartsAt)]
+      return p.pausedDate === null ? [] : [p.pausedDate]
+    })
   )
   return { now: input.now, ...settings, occupied, pausedDates }
 }

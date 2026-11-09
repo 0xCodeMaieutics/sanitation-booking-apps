@@ -1,7 +1,7 @@
 import { formatPhone } from "@sanitation/core/phone"
 import { formatDate, formatDateTime, toLocalDate, toLocalHour } from "@sanitation/core/time"
 import { Badge } from "@sanitation/ui"
-import { PauseCircleIcon, PhoneIcon } from "lucide-react"
+import { PhoneIcon } from "lucide-react"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
 
@@ -41,12 +41,6 @@ export default async function RequestPage({ params }: PageProps<"/requests/[id]"
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={status.variant}>{status.label}</Badge>
-          {pending && request.desiredStartsAt !== null ? (
-            <Badge variant="destructive">
-              <PauseCircleIcon aria-hidden />
-              დღე შეჩერებულია, სანამ არ განიხილავთ
-            </Badge>
-          ) : null}
         </div>
 
         <dl className="flex flex-col divide-y divide-border rounded-2xl bg-paper ring-1 ring-border">

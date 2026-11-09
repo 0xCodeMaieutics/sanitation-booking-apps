@@ -108,7 +108,7 @@ export const callbackRequest = pgTable(
     note: text().notNull().default(""),
     /** Set when made by choosing a Custom Service; while Pending, it pauses that day. */
     desiredStartsAt: timestamp({ withTimezone: true }),
-    /** Set when made on a Paused Day: the day the Client wanted. It pauses nothing. */
+    /** Set when made on a Paused Day: the day the Client wanted. While Pending, it keeps that day paused. */
     pausedDate: date({ mode: "string" }),
     status: callbackRequestStatus().notNull().default("pending"),
     decidedAt: timestamp({ withTimezone: true }),
@@ -118,7 +118,9 @@ export const callbackRequest = pgTable(
     index().on(t.companyId, t.status, t.desiredStartsAt),
     uniqueIndex("callback_request_one_pending_pause_per_phone")
       .on(t.companyId, t.phone)
-      .where(sql`${t.status} = 'pending' and ${t.desiredStartsAt} is not null`),
+      .where(
+        sql`${t.status} = 'pending' and (${t.desiredStartsAt} is not null or ${t.pausedDate} is not null)`
+      ),
   ]
 )
 
