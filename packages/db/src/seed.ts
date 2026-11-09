@@ -90,6 +90,9 @@ function tbilisi(daysAgo: number, hour: number): Date {
   )
 }
 
+/** The Tbilisi date `daysAgo` days before today, as YYYY-MM-DD. */
+const tbilisiDate = (daysAgo: number) => tbilisi(daysAgo, 12).toISOString().slice(0, 10)
+
 const addHours = (date: Date, hours: number) => new Date(date.getTime() + hours * 3_600_000)
 const tokenHash = () => createHash("sha256").update(randomBytes(16)).digest("hex")
 
@@ -400,6 +403,7 @@ async function seedScenario(s: Scenario): Promise<void> {
           description: r.description ?? "",
           note: r.note ?? "",
           desiredStartsAt: r.desiredStartsAt,
+          pausedDate: r.pausedDay === undefined ? null : tbilisiDate(-r.pausedDay),
           status: typeof r.status === "object" ? ("accepted" as const) : (r.status ?? "pending"),
           decidedAt: r.status === undefined || r.status === "pending" ? null : now,
           createdAt: addHours(now, -3),

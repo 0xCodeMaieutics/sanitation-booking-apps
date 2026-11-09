@@ -2,12 +2,10 @@ import {
   type Db,
   type DbOrTx,
   and,
-  desc,
   eq,
   inArray,
   isNull,
   isUniqueViolation,
-  ne,
   schema,
   sql,
 } from "@sanitation/db"
@@ -20,7 +18,7 @@ import { getActiveCompany, getCompany } from "./companies"
 import { DomainError } from "./errors"
 import { adminAlerts, clientMessages } from "./messages"
 import { normalizePhone } from "./phone"
-import { toLocalDate } from "./time"
+import { type LocalDate, toLocalDate } from "./time"
 import { checkVerificationCode, consumeVerification } from "./verification"
 
 const { callbackRequest, callbackRequestService, service } = schema
@@ -96,6 +94,7 @@ export async function createPausedDayRequest(
   m: Messaging,
   input: Verified & {
     companyId: string
+    date: LocalDate
     serviceIds: string[]
     description: string
     clientName: string
@@ -118,6 +117,7 @@ export async function createPausedDayRequest(
         clientName: input.clientName,
         description: input.description,
         note: input.note,
+        pausedDate: input.date,
       })
       .returning({ id: callbackRequest.id })
     if (row === undefined) throw new Error("Failed to create callback request")
@@ -193,20 +193,14 @@ async function withServices<T extends { id: string }>(db: DbOrTx, requests: T[])
   }))
 }
 
-/** Pending Callback Requests first (soonest desired time first), then recently decided ones. */
-export async function listCallbackRequests(db: DbOrTx, input: { companyId: string; decidedLimit: number }) {
+/** Pending Callback Requests, soonest desired time first, then the rest oldest first. */
+export async function listPendingCallbackRequests(db: DbOrTx, input: { companyId: string }) {
   const pending = await db
     .select()
     .from(callbackRequest)
     .where(and(eq(callbackRequest.companyId, input.companyId), eq(callbackRequest.status, "pending")))
     .orderBy(sql`${callbackRequest.desiredStartsAt} asc nulls last`, callbackRequest.createdAt)
-  const decided = await db
-    .select()
-    .from(callbackRequest)
-    .where(and(eq(callbackRequest.companyId, input.companyId), ne(callbackRequest.status, "pending")))
-    .orderBy(desc(callbackRequest.decidedAt))
-    .limit(input.decidedLimit)
-  return { pending: await withServices(db, pending), decided: await withServices(db, decided) }
+  return withServices(db, pending)
 }
 
 export async function getCallbackRequest(

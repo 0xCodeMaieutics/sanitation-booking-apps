@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm"
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -107,6 +108,8 @@ export const callbackRequest = pgTable(
     note: text().notNull().default(""),
     /** Set when made by choosing a Custom Service; while Pending, it pauses that day. */
     desiredStartsAt: timestamp({ withTimezone: true }),
+    /** Set when made on a Paused Day: the day the Client wanted. It pauses nothing. */
+    pausedDate: date({ mode: "string" }),
     status: callbackRequestStatus().notNull().default("pending"),
     decidedAt: timestamp({ withTimezone: true }),
     ...timestamps,

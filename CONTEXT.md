@@ -63,7 +63,7 @@ A private link sent to the Client with their confirmation SMS that lets them vie
 _Avoid_: Magic link, booking link, token
 
 **Callback Request**:
-A Client's verified request to be called back about work the Admin must agree to first. Made by choosing a Custom Service, it describes the job and carries an address and a desired start time. Made on a Paused Day, it carries the Services the Client wants (Standard, or described in their own words) and an optional note. The Admin turns it into a Booking or declines it.
+A Client's verified request to be called back about work the Admin must agree to first. Made by choosing a Custom Service, it describes the job and carries an address and a desired start time. Made on a Paused Day, it carries that day, the Services the Client wants (Standard, or described in their own words) and an optional note. The Admin turns it into a Booking or declines it.
 _Avoid_: Custom booking, contact request, lead, inquiry, waitlist
 
 **Callback Request status**:

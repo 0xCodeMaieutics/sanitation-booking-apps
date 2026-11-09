@@ -15,10 +15,11 @@ import {
   getSettings,
   listBookings,
   listAdminPhones,
-  listCallbackRequests,
+  listPendingCallbackRequests,
   listPastBookings,
   listServices,
   listTimeOff,
+  loadOccupied,
   localInstant,
   removeAdminPhone,
   removeTimeOff,
@@ -138,6 +139,18 @@ const bookingsRouter = router({
     return b
   }),
 
+  /** Time taken by Booked Bookings and Time Off from today, as far ahead as Time Off can be added. */
+  occupied: adminProcedure.query(async ({ ctx }) => {
+    const today = toLocalDate(ctx.now())
+    const occupied = await loadOccupied(
+      ctx.db,
+      ctx.companyId,
+      localInstant(today),
+      localInstant(addDays(today, 367))
+    )
+    return occupied.map(({ startsAt, endsAt }) => ({ startsAt, endsAt }))
+  }),
+
   create: adminProcedure
     .input(zAdminBooking.extend({ callbackRequestId: z.uuid().optional() }))
     .mutation(({ ctx, input }) => {
@@ -169,9 +182,7 @@ const bookingsRouter = router({
 })
 
 const callbackRequestsRouter = router({
-  list: adminProcedure.query(({ ctx }) =>
-    listCallbackRequests(ctx.db, { companyId: ctx.companyId, decidedLimit: 30 })
-  ),
+  list: adminProcedure.query(({ ctx }) => listPendingCallbackRequests(ctx.db, { companyId: ctx.companyId })),
 
   pendingCount: adminProcedure.query(({ ctx }) =>
     countPendingCallbackRequests(ctx.db, { companyId: ctx.companyId })

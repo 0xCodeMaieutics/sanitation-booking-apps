@@ -6,7 +6,7 @@ import { requireAdmin } from "@/server/caller"
 
 export default async function NewBookingPage() {
   const caller = await requireAdmin()
-  const services = await caller.services.list()
+  const [services, occupied] = await Promise.all([caller.services.list(), caller.bookings.occupied()])
   const first = services.find((s) => s.archivedAt === null)
 
   return (
@@ -14,6 +14,7 @@ export default async function NewBookingPage() {
       <PageHeader title="ახალი ჯავშანი" backHref="/" description="მაგ. ტელეფონით შეთანხმებული ვიზიტი." />
       <AdminBookingForm
         services={services}
+        occupied={occupied}
         submitLabel="დაჯავშნა"
         defaults={{
           serviceId: first?.id ?? null,

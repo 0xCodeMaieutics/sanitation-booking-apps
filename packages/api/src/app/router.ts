@@ -15,7 +15,7 @@ import {
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { zAddress, zCode, zName, zNote, zPhone } from "../shared"
+import { zAddress, zCode, zLocalDate, zName, zNote, zPhone } from "../shared"
 import { companyProcedure, createCallerFactory, publicProcedure, router } from "./trpc"
 
 const zVerified = { phone: zPhone, verificationId: z.uuid(), code: zCode }
@@ -127,6 +127,7 @@ export const appRouter = router({
     .input(
       z.object({
         ...zVerified,
+        date: zLocalDate,
         serviceIds: z.array(z.uuid()).max(20),
         description: z.string().trim().max(1000),
         clientName: z.string().trim().max(120),
