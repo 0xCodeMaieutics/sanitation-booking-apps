@@ -173,7 +173,13 @@ export function CustomFlow({ services, days }: { services: ServiceSummary[]; day
           />
         </section>
         {day?.status === "paused" ? (
-          <CallbackForm key={date} date={date} services={services} preselectedServiceId={null} />
+          <CallbackForm
+            key={date}
+            date={date}
+            services={services}
+            preselectedServiceId={null}
+            preselectedOther={description.trim()}
+          />
         ) : (
           <section className="flex flex-col gap-3" aria-labelledby="time-heading">
             <h2 id="time-heading" className="text-base">
